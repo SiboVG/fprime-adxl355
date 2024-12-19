@@ -132,11 +132,11 @@ void configureTopology() {
     comQueue.configure(configurationTable, 0, mallocator);
 
     // Set the GPIO mapping
-    /*Os::File::Status status =
+    Os::File::Status status =
         gpioDriver.open("/dev/gpiochip4", 13, Drv::LinuxGpioDriver::GpioConfiguration::GPIO_OUTPUT);
     if (status != Os::File::Status::OP_OK) {
         Fw::Logger::log("[ERROR] Failed to open GPIO pin\n");
-    }*/
+    }
 }
 
 // Public functions for use in main program are namespaced with deployment name LedBlinker

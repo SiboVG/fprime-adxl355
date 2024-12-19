@@ -7,7 +7,7 @@ module Components {
         #################################################
 
         @ Port to receive the blinking calls from the rate group
-        sync input port run: Svc.Sched
+        async input port run: Svc.Sched
 
         @ Port sending calls to the GPIO driver
         output port gpioSet: Drv.GpioWrite
