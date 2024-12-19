@@ -4,7 +4,7 @@
 //
 // ======================================================================
 // Used to access topology functions
-#include <Deployments/LedBlinker/Top/LedBlinkerTopology.hpp>
+#include <LedBlinker/Top/LedBlinkerTopology.hpp>
 // OSAL initialization
 #include <Os/Os.hpp>
 // Used for signal handling shutdown

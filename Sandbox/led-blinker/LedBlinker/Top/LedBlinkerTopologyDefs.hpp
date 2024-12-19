@@ -8,7 +8,7 @@
 
 #include "Drv/BlockDriver/BlockDriver.hpp"
 #include "Fw/Types/MallocAllocator.hpp"
-#include "Deployments/LedBlinker/Top/FppConstantsAc.hpp"
+#include "LedBlinker/Top/FppConstantsAc.hpp"
 #include "Svc/FramingProtocol/FprimeProtocol.hpp"
 #include "Svc/Health/Health.hpp"
 

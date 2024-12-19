@@ -4,7 +4,7 @@
 //
 // ======================================================================
 // Provides access to autocoded functions
-#include <Deployments/LedBlinker/Top/LedBlinkerTopologyAc.hpp>
+#include <LedBlinker/Top/LedBlinkerTopologyAc.hpp>
 // Note: Uncomment when using Svc:TlmPacketizer
 //#include <LedBlinker/Top/LedBlinkerPacketsAc.hpp>
 

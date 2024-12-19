@@ -7,7 +7,7 @@
 #define LEDBLINKER_LEDBLINKERTOPOLOGY_HPP
 // Included for access to LedBlinker::TopologyState and LedBlinker::ConfigObjects::pingEntries. These definitions are required by the
 // autocoder, but are also used in this hand-coded topology.
-#include <Deployments/LedBlinker/Top/LedBlinkerTopologyDefs.hpp>
+#include <LedBlinker/Top/LedBlinkerTopologyDefs.hpp>
 
 // Remove unnecessary LedBlinker:: qualifications
 using namespace LedBlinker;
