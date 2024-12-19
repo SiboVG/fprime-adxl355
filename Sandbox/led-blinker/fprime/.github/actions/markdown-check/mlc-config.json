@@ -1,0 +1,13 @@
+{
+    "ignorePatterns": [
+      {
+        "pattern": "^(https?://)?localhost"
+      },
+      {
+        "pattern": "https?://"
+      },
+      {
+        "pattern": "./tutorials-"
+      }
+    ]
+}
