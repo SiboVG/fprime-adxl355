@@ -26,10 +26,12 @@ void Led ::run_handler(FwIndexType portNum, U32 context) {
     // Read back the interval parameter
     Fw::ParamValid isValid = Fw::ParamValid::INVALID;
     U32 interval = this->paramGet_BLINK_INTERVAL(isValid);
-    FW_ASSERT(isValid == Fw::ParamValid::VALID, static_cast<FwAssertArgType>(isValid));
+    FW_ASSERT((isValid != Fw::ParamValid::INVALID) && (isValid != Fw::ParamValid::UNINIT),
+              static_cast<FwAssertArgType>(isValid));
 
     // If the LED is blinking, toggle the state
     if (this->m_blinking && (interval != 0)) {
+        // If toggling state
         if (this->m_toggleCounter == 0) {
             // Toggle the LED state
             this->m_ledState = (this->m_ledState == Fw::On::ON) ? Fw::On::OFF : Fw::On::ON;
@@ -68,8 +70,7 @@ void Led ::run_handler(FwIndexType portNum, U32 context) {
 
 void Led ::BLINKING_ON_OFF_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, Fw::On onOff) {
     // Reset the toggle counter
-    this->m_transitions = 0;
-    this->m_toggleCounter++;
+    this->m_toggleCounter = 0;
 
     // Set the blinking state and report an event
     this->m_blinking = onOff == Fw::On::ON;
