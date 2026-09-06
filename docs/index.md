@@ -23,7 +23,7 @@ remain HIL work rather than automated evidence.
 
 ## Build these docs
 
-From `libraries/adxl355`:
+From `libraries/fprime-adxl355`:
 
 ```sh
 python3 -m venv .venv-docs

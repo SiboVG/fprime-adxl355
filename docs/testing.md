@@ -18,7 +18,7 @@ flowchart BT
 The host suite compiles the hardware-independent core with C++11, warnings enabled, and an in-memory ADXL355 register/SPI emulator.
 
 ```sh
-cmake -S libraries/adxl355/tests -B /tmp/adxl355-host-tests -G Ninja
+cmake -S libraries/fprime-adxl355/tests -B /tmp/adxl355-host-tests -G Ninja
 cmake --build /tmp/adxl355-host-tests
 ctest --test-dir /tmp/adxl355-host-tests --output-on-failure
 ```
@@ -29,16 +29,20 @@ The integration executable creates seven independent SPI emulators and seven `De
 
 ## F Prime component tests
 
-Generate a unit-test build from the CubeSpec sandbox and run both generated GTest harnesses:
+From this library root, activate the consumer's F Prime 3.5.1 Python toolchain
+and build the checked-in standalone consumer (no workspace sandbox required):
 
 ```sh
-cd sandbox/tutorials/led-blinker
-cmake --preset fprime-ut-ninja --fresh
-cmake --build build-fprime-automatic-native-ut \
+cmake -S tests/fprime-consumer -B /tmp/adxl355-components -G Ninja \
+  -DFPRIME_FRAMEWORK_PATH=/absolute/path/to/fprime
+cmake --build /tmp/adxl355-components \
   --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
-build-fprime-automatic-native-ut/bin/$(uname)/Adxl355_Manager_ut_exe
-build-fprime-automatic-native-ut/bin/$(uname)/Adxl355_Application_ut_exe
+/tmp/adxl355-components/bin/$(uname)/Adxl355_Manager_ut_exe
+/tmp/adxl355-components/bin/$(uname)/Adxl355_Application_ut_exe
 ```
+
+The workspace sandbox also works when its `library_locations` points to
+`../../../libraries/fprime-adxl355`.
 
 The manager tests exercise FPP configuration/read ports, control commands, snapshot telemetry, the standard SPI-port adapter, and edge-limited high-rate errors. The application tests exercise seven-port fan-out, internal- and external-clock initialization, all-manager initialization with a partial mask, frame aggregation, disabled acquisition, incomplete-frame event suppression, and recovery reporting.
 
@@ -52,15 +56,15 @@ enclosing repository has a stable F Prime/submodule bootstrap path.
 Run the source-level documentation checks and a strict MkDocs render from the repository root:
 
 ```sh
-python3 libraries/adxl355/tests/DocumentationTests.py
+python3 libraries/fprime-adxl355/tests/DocumentationTests.py
 uv run --with 'mkdocs==1.6.1' \
   --with 'mkdocs-material==9.7.1' \
   mkdocs build --strict \
-  --config-file libraries/adxl355/mkdocs.yml \
+  --config-file libraries/fprime-adxl355/mkdocs.yml \
   --site-dir /tmp/adxl355-mkdocs-site
 ```
 
-Alternatively, install `requirements-docs.txt` in a virtual environment and run `mkdocs build --strict` from `libraries/adxl355`.
+Alternatively, install `requirements-docs.txt` in a virtual environment and run `mkdocs build --strict` from `libraries/fprime-adxl355`.
 
 ## Requirements traceability and analysis
 
@@ -95,3 +99,8 @@ Emulator tests do not prove electrical timing. Before flight use, run an HIL tes
 For calibrated science use, add sensor-specific scale, bias, axis alignment, temperature, and cross-axis acceptance tests above this transport library.
 
 Passing host and component tests does not close this HIL plan. Archive signal captures, measured worst-case timing, exact software/hardware versions, command/event/telemetry logs, and fault-injection results with the CubeSpec release evidence.
+
+The workspace-level path correction is retained in
+[workspace-registration.patch](workspace-registration.patch), because the workspace
+and moved sandbox have no Git repository. It has already been applied locally;
+other workspace copies can apply it from `FlightSoftware` with `git apply`.

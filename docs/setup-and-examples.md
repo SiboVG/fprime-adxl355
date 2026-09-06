@@ -2,13 +2,13 @@
 
 ## Add the library to an F Prime project
 
-Place or reference `libraries/adxl355` outside the consuming project root, then add it to `settings.ini`. The workspace LED tutorial uses:
+Place or reference `libraries/fprime-adxl355` outside the consuming project root, then add it to `settings.ini`. The workspace LED tutorial uses:
 
 ```ini
 [fprime]
 project_root: .
 framework_path: ./fprime
-library_locations: ../../../libraries/adxl355
+library_locations: ../../../libraries/fprime-adxl355
 ```
 
 The library's `library.cmake` registers all five targets. Regenerate the build after changing FPP or library locations:

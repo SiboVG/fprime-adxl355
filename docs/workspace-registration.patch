@@ -1,0 +1,22 @@
+--- a/README.md
++++ b/README.md
+@@ -20,7 +20,7 @@
+ | Project | Location | Lifecycle | Qualification note |
+ | --- | --- | --- | --- |
+ | F Prime CSP/libparam | `libraries/fprime-csp-libparam/` | Supported reusable library | Host/CI and Linux acceptance coverage exist; embedded targets still require porting and qualification. |
+-| F Prime ADXL355 | `libraries/adxl355/` | Candidate reusable library | Host verification exists; physical timing, synchronization, and flight-target HIL remain open. |
++| F Prime ADXL355 | `libraries/fprime-adxl355/` | Candidate reusable library | Host verification exists; physical timing, synchronization, and flight-target HIL remain open. |
+ | CSP/libparam bench | `verification/benches/csp-libparam/` | Acceptance bench | Verification application, not flight code. |
+ 
+ Each maintained project remains its own Git repository. Run Git commands from that project directory; the workspace root deliberately does not combine their histories.
+--- a/sandbox/tutorials/led-blinker/settings.ini
++++ b/sandbox/tutorials/led-blinker/settings.ini
+@@ -1,7 +1,7 @@
+ [fprime]
+ project_root: .
+ framework_path: ./fprime
+-library_locations: ../../../libraries/adxl355
++library_locations: ../../../libraries/fprime-adxl355
+ 
+ default_cmake_options:  FPRIME_ENABLE_FRAMEWORK_UTS=OFF
+                         FPRIME_ENABLE_AUTOCODER_UTS=OFF
