@@ -1,0 +1,180 @@
+#include "SynchronizedApplicationTester.hpp"
+
+namespace Adxl355 {
+
+SynchronizedApplicationTester::SynchronizedApplicationTester()
+    : SynchronizedApplicationGTestBase("SynchronizedApplicationTester", MAX_HISTORY_SIZE),
+      m_configureStatus(),
+      m_configureCalls(),
+      m_sensorStatus(),
+      m_sensorCalls(),
+      m_lastFrame(),
+      m_lastConfiguration(),
+      m_frameCalls(0U),
+      component("SynchronizedApplication") {
+    for (U32 index = 0U; index < MAX_SENSORS; ++index) {
+        this->m_configureStatus[index] = DriverStatus::OK;
+        this->m_configureCalls[index] = 0U;
+        this->m_sensorStatus[index] = DriverStatus::OK;
+        this->m_sensorCalls[index] = 0U;
+    }
+    this->initComponents();
+    this->connectPorts();
+}
+
+void SynchronizedApplicationTester::testInitializeAllReportsPartialMask() {
+    this->m_configureStatus[4] = DriverStatus::SPI_ERROR;
+    this->sendCmd_INITIALIZE_ALL(0,
+                                 10U,
+                                 SensorRange::G2,
+                                 OutputDataRate::HZ_4000,
+                                 HighPassCorner::OFF);
+
+    ASSERT_CMD_RESPONSE(0, SynchronizedApplication::OPCODE_INITIALIZE_ALL, 10U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_EVENTS_ArrayInitializationIncomplete_SIZE(1);
+    ASSERT_EVENTS_ArrayInitializationIncomplete(0, 0x6FU, 0x7FU);
+    ASSERT_TLM_InitializedMask(0, 0x6FU);
+    for (U32 index = 0U; index < MAX_SENSORS; ++index) {
+        ASSERT_EQ(1U, this->m_configureCalls[index]);
+    }
+    ASSERT_EQ(SynchronizationMode::EXTERNAL_NO_INTERPOLATION,
+              this->m_lastConfiguration.getsynchronizationMode());
+    ASSERT_TRUE(this->m_lastConfiguration.getexternalClock());
+    ASSERT_EQ(OutputDataRate::HZ_4000, this->m_lastConfiguration.getoutputDataRate());
+    ASSERT_EQ(0U, this->m_lastConfiguration.getinterruptMap());
+}
+
+void SynchronizedApplicationTester::testInitializeAllInternalMode() {
+    ASSERT_TRUE(this->component.configure(2U));
+    this->sendCmd_INITIALIZE_ALL_INTERNAL(0,
+                                         11U,
+                                         SensorRange::G4,
+                                         OutputDataRate::HZ_125,
+                                         HighPassCorner::OFF);
+
+    ASSERT_CMD_RESPONSE(0,
+                        SynchronizedApplication::OPCODE_INITIALIZE_ALL_INTERNAL,
+                        11U,
+                        Fw::CmdResponse::OK);
+    ASSERT_EVENTS_ArrayInitializationComplete_SIZE(1);
+    ASSERT_EVENTS_ArrayInitializationComplete(0, 0x03U);
+    ASSERT_TLM_InitializedMask(0, 0x03U);
+    ASSERT_EQ(1U, this->m_configureCalls[0]);
+    ASSERT_EQ(1U, this->m_configureCalls[1]);
+    for (U32 index = 2U; index < MAX_SENSORS; ++index) {
+        ASSERT_EQ(0U, this->m_configureCalls[index]);
+    }
+    ASSERT_EQ(SynchronizationMode::INTERNAL, this->m_lastConfiguration.getsynchronizationMode());
+    ASSERT_FALSE(this->m_lastConfiguration.getexternalClock());
+    ASSERT_EQ(SensorRange::G4, this->m_lastConfiguration.getrange());
+    ASSERT_EQ(OutputDataRate::HZ_125, this->m_lastConfiguration.getoutputDataRate());
+}
+
+void SynchronizedApplicationTester::testInvalidSensorCountsAreRejected() {
+    this->sendCmd_SET_SENSOR_COUNT(0, 20U, 0U);
+    ASSERT_CMD_RESPONSE(0,
+                        SynchronizedApplication::OPCODE_SET_SENSOR_COUNT,
+                        20U,
+                        Fw::CmdResponse::VALIDATION_ERROR);
+
+    this->sendCmd_SET_SENSOR_COUNT(0, 21U, static_cast<U8>(MAX_SENSORS + 1U));
+    ASSERT_CMD_RESPONSE(1,
+                        SynchronizedApplication::OPCODE_SET_SENSOR_COUNT,
+                        21U,
+                        Fw::CmdResponse::VALIDATION_ERROR);
+
+    this->sendCmd_REPORT(0, 22U);
+    ASSERT_TLM_SensorCount(0, MAX_SENSORS);
+}
+
+SynchronizedApplicationTester::~SynchronizedApplicationTester() {}
+
+void SynchronizedApplicationTester::testAcquisitionStartsDisabled() {
+    this->invoke_to_acquireFrame(0, 500U);
+
+    ASSERT_EQ(0U, this->m_frameCalls);
+    for (U32 index = 0U; index < MAX_SENSORS; ++index) {
+        ASSERT_EQ(0U, this->m_sensorCalls[index]);
+    }
+}
+
+void SynchronizedApplicationTester::testSevenSensorFrame() {
+    this->sendCmd_SET_ENABLED(0, 1U, true);
+    ASSERT_CMD_RESPONSE(0, SynchronizedApplication::OPCODE_SET_ENABLED, 1U, Fw::CmdResponse::OK);
+    this->invoke_to_acquireFrame(0, 1000000U);
+
+    ASSERT_EQ(1U, this->m_frameCalls);
+    ASSERT_EQ(0U, this->m_lastFrame.getsequence());
+    ASSERT_EQ(1000000U, this->m_lastFrame.getsyncTimeMicroseconds());
+    ASSERT_EQ(0x7FU, this->m_lastFrame.getvalidMask());
+    ASSERT_EQ(7U, this->m_lastFrame.getsensorCount());
+    ASSERT_EQ(1, this->m_lastFrame.getsamples()[0].getrawX());
+    ASSERT_EQ(7, this->m_lastFrame.getsamples()[6].getrawX());
+    for (U32 index = 0U; index < MAX_SENSORS; ++index) {
+        ASSERT_EQ(1U, this->m_sensorCalls[index]);
+    }
+    ASSERT_TLM_Frames_SIZE(0);
+}
+
+void SynchronizedApplicationTester::testPartialFrameIsEdgeReportedAndRecovers() {
+    this->sendCmd_SET_ENABLED(0, 2U, true);
+    ASSERT_CMD_RESPONSE(0, SynchronizedApplication::OPCODE_SET_ENABLED, 2U, Fw::CmdResponse::OK);
+    this->m_sensorStatus[2] = DriverStatus::SPI_ERROR;
+    this->invoke_to_acquireFrame(0, 10U);
+    ASSERT_EQ(0x7BU, this->m_lastFrame.getvalidMask());
+    ASSERT_EVENTS_FrameIncomplete_SIZE(1);
+    ASSERT_EVENTS_FrameIncomplete(0, 0U, 0x7BU);
+
+    this->invoke_to_acquireFrame(0, 20U);
+    ASSERT_EVENTS_FrameIncomplete_SIZE(1);
+
+    this->m_sensorStatus[2] = DriverStatus::OK;
+    this->invoke_to_acquireFrame(0, 30U);
+    ASSERT_EVENTS_FrameRecovered_SIZE(1);
+    ASSERT_EVENTS_FrameRecovered(0, 2U);
+
+    this->sendCmd_REPORT(0, 1U);
+    ASSERT_CMD_RESPONSE(1, SynchronizedApplication::OPCODE_REPORT, 1U, Fw::CmdResponse::OK);
+    ASSERT_TLM_Frames(0, 3U);
+    ASSERT_TLM_PartialFrames(0, 2U);
+    ASSERT_TLM_LastValidMask(0, 0x7FU);
+}
+
+void SynchronizedApplicationTester::testDisabledAcquisitionDoesNoWork() {
+    this->sendCmd_SET_ENABLED(0, 1U, false);
+    ASSERT_CMD_RESPONSE(0, SynchronizedApplication::OPCODE_SET_ENABLED, 1U, Fw::CmdResponse::OK);
+    this->invoke_to_acquireFrame(0, 42U);
+    ASSERT_EQ(0U, this->m_frameCalls);
+    for (U32 index = 0U; index < MAX_SENSORS; ++index) {
+        ASSERT_EQ(0U, this->m_sensorCalls[index]);
+    }
+}
+
+DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const NATIVE_INT_TYPE portNum,
+                                                                    AccelerationSample& sample) {
+    ++this->m_sensorCalls[portNum];
+    sample.set(static_cast<I32>(portNum + 1),
+               -static_cast<I32>(portNum + 1),
+               static_cast<I32>((portNum + 1) * 10),
+               static_cast<F64>(portNum + 1),
+               -static_cast<F64>(portNum + 1),
+               static_cast<F64>((portNum + 1) * 10));
+    return this->m_sensorStatus[portNum];
+}
+
+DriverStatus SynchronizedApplicationTester::from_configureSensor_handler(
+    const NATIVE_INT_TYPE portNum,
+    DeviceConfiguration& configuration) {
+    ++this->m_configureCalls[portNum];
+    this->m_lastConfiguration = configuration;
+    return this->m_configureStatus[portNum];
+}
+
+void SynchronizedApplicationTester::from_frameReady_handler(const NATIVE_INT_TYPE portNum, SampleFrame& frame) {
+    (void)portNum;
+    this->m_lastFrame = frame;
+    ++this->m_frameCalls;
+    this->pushFromPortEntry_frameReady(frame);
+}
+
+}  // namespace Adxl355

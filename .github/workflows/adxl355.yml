@@ -1,0 +1,120 @@
+name: ADXL355 checks
+
+on:
+  push:
+    paths:
+      - "Adxl355/**"
+      - "docs/**"
+      - "examples/**"
+      - "tests/**"
+      - "library.cmake"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - ".github/workflows/adxl355.yml"
+  pull_request:
+    paths:
+      - "Adxl355/**"
+      - "docs/**"
+      - "examples/**"
+      - "tests/**"
+      - "library.cmake"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - ".github/workflows/adxl355.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adxl355-host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure host tests
+        run: cmake -S tests -B build-adxl355-tests -G Ninja
+      - name: Build host tests
+        run: cmake --build build-adxl355-tests
+      - name: Run host unit and integration tests
+        run: ctest --test-dir build-adxl355-tests --output-on-failure
+      - name: Run documentation contracts
+        run: python3 tests/DocumentationTests.py
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure sanitized host tests
+        run: >-
+          cmake -S tests -B build-adxl355-sanitized -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build sanitized host tests
+        run: cmake --build build-adxl355-sanitized
+      - name: Run sanitized host tests
+        run: ctest --test-dir build-adxl355-sanitized --output-on-failure
+        env:
+          ASAN_OPTIONS: halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install coverage tooling
+        run: python -m pip install "gcovr==8.6"
+      - name: Configure coverage build
+        run: >-
+          cmake -S tests -B build-adxl355-coverage -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DADXL355_ENABLE_COVERAGE=ON
+      - name: Build and run coverage tests
+        run: >-
+          cmake --build build-adxl355-coverage &&
+          ctest --test-dir build-adxl355-coverage --output-on-failure
+      - name: Enforce production line coverage
+        run: >-
+          gcovr --root . --object-directory build-adxl355-coverage
+          --filter 'Adxl355/(Device|Array)/'
+          --fail-under-line 80 --xml-pretty --output adxl355-coverage.xml
+          build-adxl355-coverage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: adxl355-host-coverage
+          path: adxl355-coverage.xml
+          if-no-files-found: error
+
+  static-analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install static-analysis tooling
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy ninja-build
+      - name: Generate compilation database
+        run: >-
+          cmake -S tests -B build-adxl355-static -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Analyze hardware-independent production sources
+        run: >-
+          clang-tidy --warnings-as-errors=* -p build-adxl355-static
+          Adxl355/Device/Device.cpp
+          Adxl355/Array/SynchronizedArray.cpp
+
+  documentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install documentation dependencies
+        run: python -m pip install -r requirements-docs.txt
+      - name: Build strict documentation site
+        run: >-
+          mkdocs build --strict --clean
+          --config-file mkdocs.yml
