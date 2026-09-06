@@ -305,6 +305,34 @@ ADXL355_TEST(ControlArgumentValidationDoesNotTouchTheBus) {
     EXPECT_EQ(before, spi.transactions.size());
 }
 
+ADXL355_TEST(IgnoredMeasurementStartCannotInitializeDevice) {
+    RegisterSpi spi;
+    RecordingDelay delay;
+    Device device(spi, delay);
+    spi.ignorePowerWrites = true;
+    EXPECT_EQ(Status::VERIFY_ERROR, device.initialize(Configuration()));
+    EXPECT_FALSE(device.isInitialized());
+    EXPECT_FALSE(device.isMeasuring());
+    EXPECT_EQ(Status::INVALID_STATE, device.startMeasurement());
+}
+
+ADXL355_TEST(IgnoredStandbyBlocksRuntimeConfiguration) {
+    RegisterSpi spi;
+    RecordingDelay delay;
+    Device device(spi, delay);
+    EXPECT_EQ(Status::OK, device.initialize(Configuration()));
+    spi.ignorePowerWrites = true;
+    const auto before = spi.registers[0x2C];
+    EXPECT_EQ(Status::VERIFY_ERROR, device.setRange(Adxl355::Range::G8));
+    EXPECT_EQ(before, spi.registers[0x2C]);
+    EXPECT_FALSE(device.isInitialized());
+    EXPECT_EQ(Status::INVALID_STATE, device.startMeasurement());
+    EXPECT_EQ(Status::VERIFY_ERROR, device.configure(Configuration()));
+    spi.ignorePowerWrites = false;
+    EXPECT_EQ(Status::OK, device.initialize(Configuration()));
+    EXPECT_TRUE(device.isMeasuring());
+}
+
 int main() {
     return Adxl355Test::runAll();
 }

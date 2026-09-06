@@ -30,6 +30,7 @@ class RegisterSpi final : public Adxl355::SpiBus {
           fifo(),
           transactions(),
           failNext(false),
+          ignorePowerWrites(false),
           failWriteAddress(-1),
           nvmBusyReads(0) {
         registers[0x00] = 0xAD;
@@ -56,6 +57,9 @@ class RegisterSpi final : public Adxl355::SpiBus {
 
         const std::uint8_t address = static_cast<std::uint8_t>(transmit[0] >> 1U);
         const bool isRead = (transmit[0] & 0x01U) != 0U;
+        if (!isRead && address == 0x2DU && ignorePowerWrites) {
+            return true;
+        }
         if (!isRead && (static_cast<int>(address) == failWriteAddress)) {
             failWriteAddress = -1;
             return false;
@@ -134,6 +138,7 @@ class RegisterSpi final : public Adxl355::SpiBus {
     std::vector<std::uint8_t> fifo;
     std::vector<Transaction> transactions;
     bool failNext;
+    bool ignorePowerWrites;
     int failWriteAddress;
     std::size_t nvmBusyReads;
 };

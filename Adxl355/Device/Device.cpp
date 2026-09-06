@@ -146,6 +146,9 @@ Status Device::configure(const Configuration& configuration) {
     this->m_configuration = configuration;
     const std::uint8_t standbyValue = this->powerControlValue(true);
     status = this->writeRegister(Registers::POWER_CTL, &standbyValue, 1U);
+    if (status == Status::OK) {
+        status = this->verifyRegister(Registers::POWER_CTL, standbyValue, 0x07U);
+    }
     if (status != Status::OK) {
         return status;
     }
@@ -218,7 +221,18 @@ Status Device::startMeasurement() {
         return Status::INVALID_STATE;
     }
     const std::uint8_t powerValue = this->powerControlValue(false);
-    const Status status = this->writeRegister(Registers::POWER_CTL, &powerValue, 1U);
+    Status status = this->writeRegister(Registers::POWER_CTL, &powerValue, 1U);
+    if (status != Status::OK) {
+        return status;
+    }
+    status = this->verifyRegister(Registers::POWER_CTL, powerValue, 0x07U);
+    if (status != Status::OK) {
+        // Hardware state is uncertain: require full reinitialization.
+        this->m_configured = false;
+        this->m_initialized = false;
+        this->m_measuring = false;
+        return status;
+    }
     if (status == Status::OK) {
         this->m_measuring = true;
     }
@@ -227,7 +241,18 @@ Status Device::startMeasurement() {
 
 Status Device::stopMeasurement() {
     const std::uint8_t powerValue = this->powerControlValue(true);
-    const Status status = this->writeRegister(Registers::POWER_CTL, &powerValue, 1U);
+    Status status = this->writeRegister(Registers::POWER_CTL, &powerValue, 1U);
+    if (status != Status::OK) {
+        return status;
+    }
+    status = this->verifyRegister(Registers::POWER_CTL, powerValue, 0x07U);
+    if (status != Status::OK) {
+        // Hardware state is uncertain: require full reinitialization.
+        this->m_configured = false;
+        this->m_initialized = false;
+        this->m_measuring = false;
+        return status;
+    }
     if (status == Status::OK) {
         this->m_measuring = false;
     }

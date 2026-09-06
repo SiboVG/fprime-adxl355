@@ -120,3 +120,7 @@ The F Prime 3.5.1 `Drv.SpiReadWrite` port has no return status. A disconnected m
 ## Engineering-practice evidence
 
 The architecture is assessed against the workshop-derived criteria in the [ADXL355 practice audit](practices-audit.md), with stable behavior and verification mappings in [Requirements and verification](requirements-and-verification.md). The host core currently meets the 80% production line-coverage gate. The most important remaining closures are deployment concurrency analysis, status propagation at the concrete SPI boundary, local static-analysis execution (or a retained successful CI report), and flight-target HIL timing.
+
+Measurement and standby transitions verify the POWER_CTL bits before accepting
+the new state. Failed readback invalidates initialization and restart permission;
+configuration cannot proceed until standby has been confirmed.
