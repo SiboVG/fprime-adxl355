@@ -57,3 +57,7 @@ The synchronous high-rate `readAcceleration` port does not emit six acceleration
 ## Status values
 
 `DriverStatus` distinguishes invalid arguments/configuration/state, SPI errors, identity mismatch, reset timeout, readback mismatch, FIFO misalignment/empty conditions, partial aggregate success, and capacity overflow. A frame is complete only when `validMask == (1 << sensorCount) - 1`.
+
+The portable `SynchronizedArray` rejects uninitialized or stopped devices with
+`INVALID_STATE` without bus I/O, clears their valid bits, and preserves healthy
+peers. Low-level `Device` register/sample methods remain available for diagnostics.

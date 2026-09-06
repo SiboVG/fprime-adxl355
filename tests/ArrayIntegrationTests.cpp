@@ -56,6 +56,9 @@ ADXL355_TEST(OneFailedSensorProducesPartialFrameWithoutHidingOtherSamples) {
     EXPECT_EQ(Adxl355::Status::OK, array.add(second));
     EXPECT_EQ(Adxl355::Status::OK, array.add(third));
 
+    std::uint8_t initializedMask = 0U;
+    EXPECT_EQ(Adxl355::Status::OK, array.initializeAll(Adxl355::Configuration(), initializedMask));
+
     spi[0].setRawSample(10, 11, 12);
     spi[1].setRawSample(20, 21, 22);
     spi[2].setRawSample(30, 31, 32);
@@ -84,6 +87,34 @@ ADXL355_TEST(ArrayRejectsAnEighthSensor) {
         EXPECT_EQ(Adxl355::Status::OK, array.add(devices[i]));
     }
     EXPECT_EQ(Adxl355::Status::CAPACITY_EXCEEDED, array.add(devices[7]));
+}
+
+ADXL355_TEST(ArrayRejectsInvalidDeviceStatesWithoutHidingHealthyPeer) {
+    Adxl355Test::RegisterSpi spi[2];
+    Adxl355Test::RecordingDelay delay[2];
+    Adxl355::Device invalid(spi[0], delay[0]), healthy(spi[1], delay[1]);
+    Adxl355::SynchronizedArray array;
+    array.add(invalid);
+    array.add(healthy);
+    EXPECT_EQ(Adxl355::Status::OK, healthy.initialize(Adxl355::Configuration()));
+    spi[1].setRawSample(42, 0, 0);
+    for (int state = 0; state < 3; ++state) {
+        if (state == 1) {
+            EXPECT_EQ(Adxl355::Status::OK, invalid.initialize(Adxl355::Configuration()));
+            EXPECT_EQ(Adxl355::Status::OK, invalid.stopMeasurement());
+        } else if (state == 2) {
+            EXPECT_EQ(Adxl355::Status::OK, invalid.startMeasurement());
+            spi[0].failWriteAddress = 0x2C;
+            EXPECT_EQ(Adxl355::Status::SPI_ERROR, invalid.setRange(Adxl355::Range::G8));
+        }
+        const std::size_t before = spi[0].transactions.size();
+        Adxl355::SynchronizedFrame frame;
+        EXPECT_EQ(Adxl355::Status::PARTIAL, array.readFrame(99U, frame));
+        EXPECT_EQ(static_cast<std::uint8_t>(2), frame.validMask);
+        EXPECT_EQ(Adxl355::Status::INVALID_STATE, frame.sensorStatus[0]);
+        EXPECT_EQ(42, frame.samples[1].raw.x);
+        EXPECT_EQ(before, spi[0].transactions.size());
+    }
 }
 
 int main() {

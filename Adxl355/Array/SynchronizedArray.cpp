@@ -54,7 +54,10 @@ Status SynchronizedArray::readFrame(std::uint64_t syncTimeMicroseconds, Synchron
 
     bool allRead = true;
     for (std::size_t index = 0U; index < this->m_count; ++index) {
-        frame.sensorStatus[index] = this->m_devices[index]->readSample(frame.samples[index]);
+        Device& device = *this->m_devices[index];
+        frame.sensorStatus[index] = (device.isInitialized() && device.isMeasuring())
+                                        ? device.readSample(frame.samples[index])
+                                        : Status::INVALID_STATE;
         if (frame.sensorStatus[index] == Status::OK) {
             frame.validMask = static_cast<std::uint8_t>(frame.validMask | (1U << index));
         } else {
