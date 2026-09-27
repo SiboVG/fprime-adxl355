@@ -41,6 +41,9 @@ ADXL355_TEST(SevenSensorsInitializeAndProduceOneCoherentFrame) {
     EXPECT_EQ(static_cast<std::int32_t>(7), frame.samples[6].raw.x);
     EXPECT_EQ(static_cast<std::int32_t>(70), frame.samples[6].raw.z);
 
+    for (std::size_t i = 0; i < Adxl355::SynchronizedArray::MAX_SENSORS; ++i) {
+        spi[i].setRawSample(0, 0, 1);
+    }
     EXPECT_EQ(Adxl355::Status::OK, array.readFrame(123457039ULL, frame));
     EXPECT_EQ(static_cast<std::uint64_t>(1), frame.sequence);
 }
@@ -97,8 +100,8 @@ ADXL355_TEST(ArrayRejectsInvalidDeviceStatesWithoutHidingHealthyPeer) {
     array.add(invalid);
     array.add(healthy);
     EXPECT_EQ(Adxl355::Status::OK, healthy.initialize(Adxl355::Configuration()));
-    spi[1].setRawSample(42, 0, 0);
     for (int state = 0; state < 3; ++state) {
+        spi[1].setRawSample(42, 0, 0);
         if (state == 1) {
             EXPECT_EQ(Adxl355::Status::OK, invalid.initialize(Adxl355::Configuration()));
             EXPECT_EQ(Adxl355::Status::OK, invalid.stopMeasurement());
@@ -115,6 +118,58 @@ ADXL355_TEST(ArrayRejectsInvalidDeviceStatesWithoutHidingHealthyPeer) {
         EXPECT_EQ(42, frame.samples[1].raw.x);
         EXPECT_EQ(before, spi[0].transactions.size());
     }
+}
+
+ADXL355_TEST(StaleSensorIsFlaggedWithoutHidingFreshPeers) {
+    Adxl355Test::RegisterSpi spi[3];
+    Adxl355Test::RecordingDelay delay[3];
+    Adxl355::Device first(spi[0], delay[0]);
+    Adxl355::Device second(spi[1], delay[1]);
+    Adxl355::Device third(spi[2], delay[2]);
+    Adxl355::SynchronizedArray array;
+    EXPECT_EQ(Adxl355::Status::OK, array.add(first));
+    EXPECT_EQ(Adxl355::Status::OK, array.add(second));
+    EXPECT_EQ(Adxl355::Status::OK, array.add(third));
+    std::uint8_t initializedMask = 0U;
+    EXPECT_EQ(Adxl355::Status::OK,
+              array.initializeAll(Adxl355Test::synchronizedConfiguration(), initializedMask));
+
+    // Sensor 1 has lost its conversion clock and publishes no new data.
+    spi[0].setRawSample(1, 0, 0);
+    spi[2].setRawSample(3, 0, 0);
+    Adxl355::SynchronizedFrame frame;
+    EXPECT_EQ(Adxl355::Status::PARTIAL, array.readFrame(7U, frame));
+    EXPECT_EQ(static_cast<std::uint8_t>(0x05), frame.validMask);
+    EXPECT_EQ(Adxl355::Status::STALE_DATA, frame.sensorStatus[1]);
+    EXPECT_EQ(static_cast<std::int32_t>(3), frame.samples[2].raw.x);
+}
+
+ADXL355_TEST(EmptyArrayRejectsInitializationAndFrames) {
+    Adxl355::SynchronizedArray array;
+    std::uint8_t initializedMask = 0xFFU;
+    EXPECT_EQ(Adxl355::Status::INVALID_STATE,
+              array.initializeAll(Adxl355Test::synchronizedConfiguration(), initializedMask));
+    EXPECT_EQ(static_cast<std::uint8_t>(0), initializedMask);
+    Adxl355::SynchronizedFrame frame;
+    EXPECT_EQ(Adxl355::Status::INVALID_STATE, array.readFrame(1U, frame));
+    EXPECT_EQ(static_cast<std::size_t>(0), array.size());
+}
+
+ADXL355_TEST(PartialInitializationReportsTheInitializedMask) {
+    Adxl355Test::RegisterSpi spi[2];
+    Adxl355Test::RecordingDelay delay[2];
+    Adxl355::Device first(spi[0], delay[0]);
+    Adxl355::Device second(spi[1], delay[1]);
+    Adxl355::SynchronizedArray array;
+    EXPECT_EQ(Adxl355::Status::OK, array.add(first));
+    EXPECT_EQ(Adxl355::Status::OK, array.add(second));
+    spi[1].registers[0x02] = 0x00U;
+
+    std::uint8_t initializedMask = 0U;
+    EXPECT_EQ(Adxl355::Status::PARTIAL,
+              array.initializeAll(Adxl355Test::synchronizedConfiguration(), initializedMask));
+    EXPECT_EQ(static_cast<std::uint8_t>(0x01), initializedMask);
+    EXPECT_EQ(static_cast<std::size_t>(2), array.size());
 }
 
 int main() {

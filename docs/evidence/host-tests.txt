@@ -1,0 +1,79 @@
+# Host unit, integration, and gate tests
+# Recorded 2026-09-27T15:38Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 3.5.1 (sandbox checkout); fpp 2.2.1 JVM wheels via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools linker ld-27037.1
+
+$ cmake -S tests -B build-host -G Ninja && cmake --build build-host
+(build completed with -Wall -Wextra -Werror; no warnings)
+
+$ build-host/adxl355-unit-tests
+[PASS] IdentityReadUsesOneAutoIncrementingSpiTransaction
+[PASS] IdentityMismatchIsRejected
+[PASS] InitializeStoresTheIdentityItAlreadyRead
+[PASS] DirectReadDecodesSignedTwentyBitAxesAndScale
+[PASS] SampleReadIsOneStatusThroughZdataBurst
+[PASS] StatusCheckedReadReportsStaleDataWithoutReplacingOutput
+[PASS] MissingExternalClockIsStaleRatherThanZeroAcceleration
+[PASS] StuckMisoIsRejectedAsImplausibleOrStale
+[PASS] ScaleTracksConfiguredRange
+[PASS] TemperatureUsesDatasheetInterceptAndSlope
+[PASS] TemperatureRereadsAcrossAnUpdateAndRejectsUnstableValues
+[PASS] SynchronizedPresetProgramsBoardModeBeforeMeasurement
+[PASS] ResetPollingHasABoundedNvmBusyTimeout
+[PASS] ShadowReferenceIsCapturedBeforeTheFirstSoftwareReset
+[PASS] SoftResetRepeatsUntilShadowRegistersMatch
+[PASS] PersistentShadowMismatchIsReportedAndLeavesDeviceUnconfigured
+[PASS] ReadFailuresBeforeTheResetLeaveTheDeviceUntouched
+[PASS] ResetTransportFailuresLeaveTheDeviceUnconfigured
+[PASS] ExternalClockRejectsInt2InterruptMappings
+[PASS] ExternalSyncWithoutExternalClockIsRejectedBeforeIo
+[PASS] InvalidConfigurationFieldsAreRejectedBeforeIo
+[PASS] SpiFailureIsReportedWithoutChangingState
+[PASS] StartWriteFailureDuringInitializeLeavesDeviceUnconfigured
+[PASS] EveryProgrammingFailureAfterResetLeavesDeviceUnconfigured
+[PASS] FailedReconfigurationCannotResumeAPartiallyProgrammedDevice
+[PASS] FailedRuntimeReconfigurationInvalidatesDeviceState
+[PASS] RuntimeControlsRequireAConfiguredDevice
+[PASS] StopIsAllowedFromEveryStateAndStartResumesFromStandby
+[PASS] FifoReadReturnsWholeVerifiedXyzSets
+[PASS] FullFifoIsReadInOneBoundedTransfer
+[PASS] FifoReadRejectsBrokenAxisMarkers
+[PASS] FifoReadRejectsEmptyMarkersAndInvalidArguments
+[PASS] FifoReadRejectsAPartialXyzEntryCount
+[PASS] FifoReadRejectsAnImplausibleEntryCount
+[PASS] RuntimeRangeAndFilterChangesUseStandbyAndResumeMeasurement
+[PASS] RuntimeControlsInStandbyStayInStandby
+[PASS] SynchronizationControlProgramsAndVerifies
+[PASS] FifoWatermarkControlProgramsAndVerifies
+[PASS] OffsetsAndActivityConfigurationAreWrittenBigEndian
+[PASS] OffsetAndActivityReadbackMismatchesInvalidateTheDevice
+[PASS] InterruptAndSelfTestControlPreserveUnrelatedBits
+[PASS] InterruptPolarityReadbackMismatchInvalidatesTheDevice
+[PASS] SelfTestStateIsTrackedAndForceRequiresMode
+[PASS] SynchronizationControlRejectsClockAndInt2ConflictBeforeIo
+[PASS] ControlArgumentValidationDoesNotTouchTheBus
+[PASS] IgnoredMeasurementStartCannotInitializeDevice
+[PASS] IgnoredStandbyBlocksRuntimeConfiguration
+[PASS] DiagnosticRegisterWriteReturnsTheLifecycleToUnconfigured
+[PASS] RegisterAccessRejectsInvalidTransfersWithoutIo
+[PASS] StatusRegisterFlagsAreDecoded
+[PASS] RawDiagnosticReadDoesNotConsumeDataReady
+51/51 tests passed
+exit status: 0
+
+$ build-host/adxl355-integration-tests
+[PASS] SevenSensorsInitializeAndProduceOneCoherentFrame
+[PASS] OneFailedSensorProducesPartialFrameWithoutHidingOtherSamples
+[PASS] ArrayRejectsAnEighthSensor
+[PASS] ArrayRejectsInvalidDeviceStatesWithoutHidingHealthyPeer
+[PASS] StaleSensorIsFlaggedWithoutHidingFreshPeers
+[PASS] EmptyArrayRejectsInitializationAndFrames
+[PASS] PartialInitializationReportsTheInitializedMask
+7/7 tests passed
+exit status: 0
+
+$ build-host/adxl355-gate-tests
+[PASS] TryAcquireIsExclusiveUntilRelease
+[PASS] ControlAcquireRetriesWithABoundedDelay
+[PASS] GateHoldReleasesOnlyWhatItAcquired
+[PASS] ConcurrentOwnersNeverOverlap
+4/4 tests passed
+exit status: 0

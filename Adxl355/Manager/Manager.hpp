@@ -1,13 +1,19 @@
 #ifndef ADXL355_MANAGER_MANAGER_HPP
 #define ADXL355_MANAGER_MANAGER_HPP
 
+#include "Adxl355/Device/AccessGate.hpp"
 #include "Adxl355/Device/Device.hpp"
 #include "Adxl355/Manager/ManagerComponentAc.hpp"
+#include "Adxl355/Platform/OsDelay.hpp"
 
 namespace Adxl355 {
 
 class Manager final : public ManagerComponentBase {
   public:
+    //! Attempts (1 ms apart) a control handler makes to take the gate. The
+    //! high-rate reader holds it for one SPI transfer, so one retry suffices.
+    static const U32 CONTROL_ACQUIRE_ATTEMPTS = 10U;
+
     explicit Manager(const char* const componentName);
     ~Manager();
 
@@ -21,12 +27,7 @@ class Manager final : public ManagerComponentBase {
         Manager& m_owner;
     };
 
-    class OsDelay final : public Delay {
-      public:
-        void delayMilliseconds(std::uint32_t milliseconds) override;
-    };
-
-    DriverStatus configure_handler(FwIndexType portNum, DeviceConfiguration& configuration) override;
+    DriverStatus configure_handler(FwIndexType portNum, const DeviceConfiguration& configuration) override;
     DriverStatus readAcceleration_handler(FwIndexType portNum, AccelerationSample& sample) override;
     DriverStatus readTemperature_handler(FwIndexType portNum, TemperatureSample& sample) override;
     DriverStatus measurementControl_handler(FwIndexType portNum, bool enable) override;
@@ -63,21 +64,28 @@ class Manager final : public ManagerComponentBase {
                                    bool activeHigh) override;
     void SET_SELF_TEST_cmdHandler(FwOpcodeType opCode,
                                   U32 commandSequence,
-                                  bool stimulateAxis1,
-                                  bool stimulateAxis2) override;
+                                  bool enableMode,
+                                  bool applyForce) override;
     void SET_FIFO_WATERMARK_cmdHandler(FwOpcodeType opCode, U32 commandSequence, U8 watermark) override;
     void READ_SNAPSHOT_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
+    void CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
 
+    bool acquireForControl(Operation operation);
+    void runControl(FwOpcodeType opCode, U32 commandSequence, Operation operation, Status status);
+    Status initializeDevice(const Configuration& configuration);
     static DriverStatus toFppStatus(Status status);
     static Configuration toCoreConfiguration(const DeviceConfiguration& configuration);
+    static bool isOperatorError(Status status);
     void recordStatus(Operation operation, Status status);
     void recordHighRateStatus(Operation operation, Status status);
     void respond(FwOpcodeType opCode, U32 commandSequence, Status status);
+    void publishLifecycle();
     void emitSampleTelemetry(const Sample& sample);
 
     PortSpiBus m_spiBus;
     OsDelay m_delay;
     Device m_device;
+    AccessGate m_gate;
     U64 m_samplesRead;
     U64 m_errors;
     Status m_lastHighRateStatus;

@@ -27,7 +27,7 @@ The official no-OS implementation was used as an API and protocol cross-check, n
 | status and FIFO entry/data APIs | `readStatus`, `readFifo`, `setFifoWatermark` |
 | activity configuration | `configureActivity` |
 | interrupt routing and polarity | `configureInterrupts` |
-| self-test | `setSelfTest` stimulus control |
+| self-test | `setSelfTest(enableMode, applyForce)` ST1/ST2 control, tracked and cleared by reset |
 
 The no-OS header defines the `SYNC` register but does not expose a typed synchronization configuration API in its classic driver interface. This library adds `SyncMode`, external-clock conflict validation, and the explicit `externalSynchronized4kHz()` preset because synchronization is central to the CubeSpec hardware.
 
@@ -35,11 +35,18 @@ The no-OS header defines the `SYNC` register but does not expose a typed synchro
 
 - SPI uses mode 0 and is limited to 10 MHz.
 - Direct acceleration results are signed 20-bit values left-justified in three bytes.
-- A single nine-byte read begins at `XDATA3` to retrieve coherent X/Y/Z data.
+- A single 13-byte read begins at `STATUS` so X/Y/Z and `DATA_RDY` come from one transaction. The data sheet guarantees one data set only when the read starts after `DATA_RDY` and completes within about one output period.
 - Temperature conversion uses nominal 25 degrees Celsius at code 1885 and nominal slope -9.05 LSB/degree Celsius.
 - Typical sensitivities are used for engineering-unit conversion; production calibration is intentionally outside the device driver.
 - External-clock mode reserves `INT2`, and external synchronization uses `DRDY/SYNC`.
 - Reset completion is bounded by polling `STATUS.NVM_BUSY` rather than using an unbounded delay.
+- `DATA_RDY` clears on a STATUS read and sets only for newer data, and STATUS bits 7:5 always read 0; the acquisition path uses both to reject stale and implausible bus data.
+- A software reset can load NVM trim incorrectly on `REVID` <= 0x01; shadow registers 0x50 through 0x54 are compared before and after each reset, as the data sheet recommends.
+- Temperature is not double buffered, so it is read until two consecutive reads agree.
+- `EXT_SYNC = 01` without `EXT_CLK` is rejected (Table 14, not recommended); a missing external clock in the flight mode yields null outputs, reported as `STALE_DATA`.
+- ST1 enables self-test mode and ST2 applies the force; ST2 without ST1 is rejected.
+- Only `HPF_CORNER`, `INT_MAP`, ST1/ST2, and reset may change in measurement mode; every other control enters standby first.
+- The FIFO is a stream-mode buffer that overruns continuously when not drained, so `FIFO_OVR` is not a fault in the direct-read path.
 
 ## EVAL-ADXL355Z bench decisions
 

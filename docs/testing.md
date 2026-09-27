@@ -15,7 +15,7 @@ flowchart BT
 
 ## Host unit and integration tests
 
-The host suite compiles the hardware-independent core with C++11, warnings enabled, and an in-memory ADXL355 register/SPI emulator.
+The host suite compiles the hardware-independent core with C++11, `-Wall -Wextra -Werror -pedantic`, and an in-memory ADXL355 register/SPI emulator. The emulator follows the data sheet: writable bit masks per register, `DATA_RDY`/`FIFO_OVR`/activity cleared by a STATUS read, shadow trim registers reloaded by a software reset (with an injectable bad load), stuck-low and stuck-high MISO, ignored writes, and scripted temperature tearing.
 
 ```sh
 cmake -S libraries/fprime-adxl355/tests -B /tmp/adxl355-host-tests -G Ninja
@@ -23,14 +23,42 @@ cmake --build /tmp/adxl355-host-tests
 ctest --test-dir /tmp/adxl355-host-tests --output-on-failure
 ```
 
-Unit coverage includes command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, temperature conversion, reset timeout behavior, board synchronization programming, readback verification, SPI errors, safe full and runtime reconfiguration failure, FIFO marker validation, offsets, activity, interrupts, self-test bits, and argument validation.
+Three executables run:
 
-The integration executable creates seven independent SPI emulators and seven `Device` objects. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, partial success after one sensor failure, and rejection of an eighth sensor.
+- `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, temperature conversion and tear rejection, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
+- `adxl355-integration-tests` creates seven independent emulators and `Device` objects behind the portable `SynchronizedArray`. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, and fault containment for failed, stopped, and stale sensors.
+- `adxl355-gate-tests` verifies the `AccessGate` contract, including a two-thread test that no two owners ever overlap.
+
+## F Prime tool chain
+
+Component tests and deployments need the Python tools pinned by the F Prime 3.5.1
+checkout, including fpp 2.2.1. In the CubeSpec workspace, create that environment with:
+
+```sh
+tools/workspace/bootstrap-fprime-venv.sh --fprime /absolute/path/to/fprime --venv .venv-fprime
+. .venv-fprime/bin/activate
+```
+
+Outside the workspace, the equivalent is:
+
+```sh
+python3 -m venv .venv-fprime && . .venv-fprime/bin/activate
+python -m pip install -r /absolute/path/to/fprime/requirements.txt
+# macOS only: fpp's macOS wheels contain x86_64 executables, so install the same
+# release's platform-independent (JVM) wheels instead. Requires Java 17 or newer.
+python -m pip download --no-deps --only-binary=:all: --platform any -d fpp-wheels \
+  $(grep -o '^fprime-fpp-[a-z-]*==[^ ;#]*' /absolute/path/to/fprime/requirements.txt)
+python -m pip install --force-reinstall --no-deps fpp-wheels/*.whl
+```
+
+Linux hosts use fpp's native wheels. The macOS JVM wheels run the same fpp release, so
+every host generates identical code. If a macOS link fails with `tapi error: malformed
+file`, the selected Xcode is older than the default SDK: update Xcode, or select the
+matching Command Line Tools with `sudo xcode-select -s /Library/Developer/CommandLineTools`.
 
 ## F Prime component tests
 
-From this library root, activate the consumer's F Prime 3.5.1 Python toolchain
-and build the checked-in standalone consumer (no workspace sandbox required):
+From this library root, with that environment active, build the checked-in standalone consumer (no workspace sandbox required):
 
 ```sh
 cmake -S tests/fprime-consumer -B /tmp/adxl355-components -G Ninja \
@@ -41,15 +69,27 @@ cmake --build /tmp/adxl355-components \
 /tmp/adxl355-components/bin/$(uname)/Adxl355_Application_ut_exe
 ```
 
-The workspace sandbox also works when its `library_locations` points to
-`../../../libraries/fprime-adxl355`.
+The workspace sandbox also works when its `library_locations` points to `../../../libraries/fprime-adxl355`.
 
-The manager tests exercise FPP configuration/read ports, control commands, snapshot telemetry, the standard SPI-port adapter, and edge-limited high-rate errors. The application tests exercise seven-port fan-out, internal- and external-clock initialization, all-manager initialization with a partial mask, frame aggregation, disabled acquisition, incomplete-frame event suppression, and recovery reporting.
+The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges, stuck-bus and stale-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, and every other command and port must report `BUSY` after a bounded wait without changing device state.
 
-These generated harnesses have passed with the pinned CubeSpec F Prime 3.5.1
-toolchain, but they are not yet part of `.github/workflows/adxl355.yml`. Run
-them before integration changes are accepted, and add a workflow job when the
-enclosing repository has a stable F Prime/submodule bootstrap path.
+The application tests exercise seven-port fan-out, internal- and external-clock initialization, partial initialization, frame aggregation, disabled acquisition, the enabled-state reconfiguration interlock, throttled events from an intermittent sensor, deferred throttle clearing, overlapping triggers that must be skipped and leave a sequence gap, commands rejected while initialization owns the gate, and edge-detection restart.
+
+The workflow job `fprime-components` checks out F Prime v3.5.1, runs both executables with coverage instrumentation, and enforces a line-coverage gate on `Adxl355/Manager`, `Adxl355/Application`, and `Adxl355/Platform`.
+
+## Static analysis
+
+`clang-tidy` runs the `clang-analyzer-*` checks with warnings as errors (`.clang-tidy`). Use the host build's compilation database for the portable core and the F Prime consumer build's for the components:
+
+```sh
+cmake -S tests -B build-static -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+clang-tidy --warnings-as-errors='*' -p build-static \
+  Adxl355/Device/Device.cpp Adxl355/Device/AccessGate.cpp Adxl355/Array/SynchronizedArray.cpp
+clang-tidy --warnings-as-errors='*' -p /tmp/adxl355-components \
+  Adxl355/Manager/Manager.cpp Adxl355/Application/SynchronizedApplication.cpp Adxl355/Platform/OsDelay.cpp
+```
+
+Use a `clang-tidy` at least as new as the platform SDK (on macOS, a current Homebrew `llvm`). An older one fails while parsing system headers: Homebrew LLVM 18, for example, cannot parse the macOS 27 SDK even when pointed at its own libc++. Linux CI uses the distribution's `clang-tidy`.
 
 ## Documentation tests
 
@@ -66,22 +106,17 @@ uv run --with 'mkdocs==1.6.1' \
 
 Alternatively, install `requirements-docs.txt` in a virtual environment and run `mkdocs build --strict` from `libraries/fprime-adxl355`.
 
+## Retained evidence
+
+`docs/evidence/` holds the executed results: host tests, sanitizers, host and component coverage, F Prime component tests, static analysis, and documentation checks. `source-sha256.json` records the hash of every source, test, and build file those results were produced from. `python3 tests/check_evidence.py` fails if any recorded file has changed since, so stale evidence cannot pass review silently. After changing code, rerun the suites, refresh the evidence files, and regenerate the manifest with `python3 tests/check_evidence.py --update`.
+
+Coverage numbers belong in the evidence files and CI reports, not in prose. Coverage is supporting evidence: reviewers must still assess state transitions, fault paths, timing, and requirement coverage.
+
 ## Requirements traceability and analysis
 
 The [requirements and verification matrix](requirements-and-verification.md) maps stable library requirement IDs to named host tests, generated F Prime tests, inspection evidence, and open HIL work. Update that page in the same change whenever behavior or tests change.
 
-The host core is compiled with `-Wall -Wextra -Werror -pedantic`. The ADXL355
-workflow also runs address/undefined-behavior sanitizers and `clang-tidy`, and
-enforces an 80% production line-coverage gate. The current host audit covers
-473 of 548 production lines (86.3%); CI retains its own XML report for each
-workflow run. Coverage is supporting evidence: reviewers must still assess
-state transitions, fault paths, timing, and requirement coverage.
-
-The CI static-analysis gate is configured, but local `clang-tidy` execution
-remains open because the tool was unavailable on the review host. Retain a
-successful CI report before closing that evidence item. Likewise, physical
-Raspberry Pi and flight-target HIL remain open until their identified as-run
-records have been captured and reviewed.
+The workflow also runs address/undefined-behavior sanitizers over the host tests. A remote workflow run has not yet been observed; the local results are the evidence of record until one is retained. Physical Raspberry Pi and flight-target HIL remain open until their identified as-run records have been captured and reviewed.
 
 ## Hardware-in-the-loop acceptance plan
 
@@ -89,12 +124,14 @@ Emulator tests do not prove electrical timing. Before flight use, run an HIL tes
 
 1. Validate device IDs and revision from every CS independently.
 2. Capture the clock, sync, CS, SCLK, MOSI, and MISO signals for at least several frames.
-3. Measure worst-case acquisition duration under flight CPU load; require margin below 250 microseconds.
+3. Measure worst-case acquisition duration (seven 14-byte reads) under flight CPU load; require margin below 250 microseconds.
 4. Apply the same static acceleration to all sensors and compare sequence-aligned results.
-5. Disable or corrupt one CS and verify only its bit clears while the other samples continue.
-6. Stop the 1.024 MHz clock and verify the platform health monitor detects the stalled data path.
-7. Exercise reset, reinitialization, and recovery without power cycling.
-8. Run long enough to bound FIFO/status overruns and frame-sequence gaps.
+5. Disable or corrupt one CS and verify only its bit clears, with `STALE_DATA` or `IMPLAUSIBLE_DATA`, while the other samples continue.
+6. Stop the 1.024 MHz clock and verify every sensor reports `STALE_DATA` and the platform health monitor reacts.
+7. Stop the synchronization pulses and verify the platform timing monitor detects it; the sensors keep running on the last pulse.
+8. Confirm STATUS bits 7:5 read 0 and `DATA_RDY` clears on a STATUS read on the flight silicon (ADXL-INT-008).
+9. Exercise reset, reinitialization, and recovery without power cycling, and read the shadow registers after each reset.
+10. Run long enough to bound sequence gaps and `SkippedTriggers`.
 
 For calibrated science use, add sensor-specific scale, bias, axis alignment, temperature, and cross-axis acceptance tests above this transport library.
 

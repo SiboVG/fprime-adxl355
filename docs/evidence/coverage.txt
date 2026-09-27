@@ -1,0 +1,53 @@
+# Coverage
+# Recorded 2026-09-27T15:38Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 3.5.1 (sandbox checkout); fpp 2.2.1 JVM wheels via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools linker ld-27037.1
+
+## Portable core (tests/, Apple Clang, llvm-cov gcov)
+100% tests passed, 0 tests failed out of 3
+File                                       Lines    Exec  Cover   Missing
+------------------------------------------------------------------------------
+Adxl355/Array/SynchronizedArray.cpp           54      54   100%
+Adxl355/Device/AccessGate.cpp                 25      25   100%
+Adxl355/Device/Device.cpp                    604     599    99%   658,678,720,833-834
+Adxl355/Device/Registers.hpp                   4       4   100%
+------------------------------------------------------------------------------
+TOTAL                                        687     682    99%
+------------------------------------------------------------------------------
+lines: 99.3% (682 out of 687)
+functions: 100.0% (68 out of 68)
+branches: 90.1% (290 out of 322)
+
+## Portable core with GCC 14 (the CI compiler family), CI gates --fail-under-line 95 --fail-under-branch 80
+Homebrew GCC 14.2 targets macOS 15 and cannot parse the macOS 27 SDK headers, so this cross-check alone compiles against the macOS 26.5 SDK.
+100% tests passed, 0 tests failed out of 3
+File                                       Lines    Exec  Cover   Missing
+------------------------------------------------------------------------------
+Adxl355/Array/SynchronizedArray.cpp           45      45   100%
+Adxl355/Device/AccessGate.cpp                 21      21   100%
+Adxl355/Device/Device.cpp                    536     532    99%   658,678,720,833
+Adxl355/Device/Registers.hpp                   4       4   100%
+------------------------------------------------------------------------------
+TOTAL                                        606     602    99%
+------------------------------------------------------------------------------
+lines: 99.3% (602 out of 606)
+functions: 85.0% (68 out of 80)
+branches: 93.2% (399 out of 428)
+gate exit status: 0
+
+## F Prime components (Adxl355/Manager, Application, Platform; --coverage build of the same consumer), CI gate --fail-under-line 85
+[  PASSED  ] 13 tests.
+[  PASSED  ] 12 tests.
+File                                       Lines    Exec  Cover   Missing
+------------------------------------------------------------------------------
+Adxl355/Application/SynchronizedApplication.cpp
+                                             193     185    95%   50,91,177-178,233-234,237-238
+Adxl355/Manager/Manager.cpp                  320     303    94%   15,265-267,277-279,328,335,343,347,351,353,355,357,366-367
+Adxl355/Platform/OsDelay.cpp                   5       5   100%
+------------------------------------------------------------------------------
+TOTAL                                        518     493    95%
+------------------------------------------------------------------------------
+lines: 95.2% (493 out of 518)
+functions: 100.0% (49 out of 49)
+branches: 57.4% (391 out of 681)
+gate exit status: 0
+
+Branch percentages for generated-macro-heavy F Prime sources are reported in the CI artifact but not gated: LLVM counts implicit branches in telemetry and event macros.

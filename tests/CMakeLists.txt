@@ -6,8 +6,11 @@ enable_testing()
 
 option(ADXL355_ENABLE_COVERAGE "Instrument ADXL355 host tests for gcov coverage" OFF)
 
+find_package(Threads REQUIRED)
+
 add_library(adxl355_core STATIC
     "${CMAKE_CURRENT_LIST_DIR}/../Adxl355/Device/Device.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../Adxl355/Device/AccessGate.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../Adxl355/Array/SynchronizedArray.cpp"
 )
 
@@ -30,11 +33,24 @@ add_executable(adxl355-integration-tests
 target_link_libraries(adxl355-integration-tests PRIVATE adxl355_core)
 target_compile_features(adxl355-integration-tests PRIVATE cxx_std_11)
 
+add_executable(adxl355-gate-tests
+    "${CMAKE_CURRENT_LIST_DIR}/GateTests.cpp"
+)
+target_link_libraries(adxl355-gate-tests PRIVATE adxl355_core Threads::Threads)
+target_compile_features(adxl355-gate-tests PRIVATE cxx_std_11)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    foreach(test_target adxl355-unit-tests adxl355-integration-tests adxl355-gate-tests)
+        target_compile_options(${test_target} PRIVATE -Wall -Wextra -Werror)
+    endforeach()
+endif()
+
 if(ADXL355_ENABLE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(adxl355_core PRIVATE --coverage)
         target_link_options(adxl355-unit-tests PRIVATE --coverage)
         target_link_options(adxl355-integration-tests PRIVATE --coverage)
+        target_link_options(adxl355-gate-tests PRIVATE --coverage)
     else()
         message(FATAL_ERROR "ADXL355_ENABLE_COVERAGE requires Clang or GCC")
     endif()
@@ -42,3 +58,4 @@ endif()
 
 add_test(NAME adxl355-unit-tests COMMAND adxl355-unit-tests)
 add_test(NAME adxl355-integration-tests COMMAND adxl355-integration-tests)
+add_test(NAME adxl355-gate-tests COMMAND adxl355-gate-tests)

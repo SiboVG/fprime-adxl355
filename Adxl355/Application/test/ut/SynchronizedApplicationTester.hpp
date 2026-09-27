@@ -9,7 +9,7 @@ namespace Adxl355 {
 
 class SynchronizedApplicationTester final : public SynchronizedApplicationGTestBase {
   public:
-    static const NATIVE_INT_TYPE MAX_HISTORY_SIZE = 100;
+    static const NATIVE_INT_TYPE MAX_HISTORY_SIZE = 200;
     static const NATIVE_INT_TYPE TEST_INSTANCE_ID = 0;
 
     SynchronizedApplicationTester();
@@ -22,12 +22,20 @@ class SynchronizedApplicationTester final : public SynchronizedApplicationGTestB
     void testInvalidSensorCountsAreRejected();
     void testPartialFrameIsEdgeReportedAndRecovers();
     void testDisabledAcquisitionDoesNoWork();
+    void testReconfigurationIsRejectedWhileEnabled();
+    void testIntermittentSensorEventsAreThrottled();
+    void testOverlappingTriggerIsSkippedCountedAndLeavesASequenceGap();
+    void testCommandsDuringInitializationReportBusy();
+    void testEnablingRestartsEdgeDetection();
 
   private:
+    enum class Reentry { NONE, TRIGGER, ENABLE_AND_COUNT };
+
     void connectPorts();
     void initComponents();
 
-    DriverStatus from_configureSensor_handler(const NATIVE_INT_TYPE portNum, DeviceConfiguration& configuration);
+    DriverStatus from_configureSensor_handler(const NATIVE_INT_TYPE portNum,
+                                              const DeviceConfiguration& configuration);
     DriverStatus from_readSensor_handler(const NATIVE_INT_TYPE portNum, AccelerationSample& sample);
     void from_frameReady_handler(const NATIVE_INT_TYPE portNum, SampleFrame& frame);
 
@@ -38,6 +46,7 @@ class SynchronizedApplicationTester final : public SynchronizedApplicationGTestB
     SampleFrame m_lastFrame;
     DeviceConfiguration m_lastConfiguration;
     U32 m_frameCalls;
+    Reentry m_reentry;
     SynchronizedApplication component;
 };
 

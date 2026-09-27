@@ -1,32 +1,55 @@
 #include "ManagerTester.hpp"
 
+#include "Adxl355/Device/Registers.hpp"
+
 namespace Adxl355 {
 
+namespace {
+
+DeviceConfiguration synchronizedPreset() {
+    return DeviceConfiguration(SensorRange::G2,
+                               OutputDataRate::HZ_4000,
+                               HighPassCorner::OFF,
+                               SynchronizationMode::EXTERNAL_NO_INTERPOLATION,
+                               true,
+                               true,
+                               true,
+                               false,
+                               0U,
+                               96U);
+}
+
+}  // namespace
+
 ManagerTester::ManagerTester()
-    : ManagerGTestBase("ManagerTester", ManagerTester::MAX_HISTORY_SIZE), m_emulator(), component("Manager") {
+    : ManagerGTestBase("ManagerTester", ManagerTester::MAX_HISTORY_SIZE),
+      m_emulator(),
+      m_reentry(Reentry::NONE),
+      m_reentrantStatus(DriverStatus::OK),
+      m_reentrantPortStatus(),
+      component("Manager") {
     this->initComponents();
     this->connectPorts();
 }
 
 ManagerTester::~ManagerTester() {}
 
+void ManagerTester::initialize() {
+    this->clearHistory();
+    this->sendCmd_INITIALIZE_SYNCED(0, 1U, SensorRange::G2, OutputDataRate::HZ_4000, HighPassCorner::OFF);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_INITIALIZE_SYNCED, 1U, Fw::CmdResponse::OK);
+    this->clearHistory();
+}
+
 void ManagerTester::testConfigureAndRead() {
-    DeviceConfiguration configuration(SensorRange::G2,
-                                      OutputDataRate::HZ_4000,
-                                      HighPassCorner::OFF,
-                                      SynchronizationMode::EXTERNAL_NO_INTERPOLATION,
-                                      true,
-                                      true,
-                                      true,
-                                      false,
-                                      0U,
-                                      96U);
-    EXPECT_EQ(DriverStatus::OK, this->invoke_to_configure(0, configuration));
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_configure(0, synchronizedPreset()));
     ASSERT_EVENTS_InitializationComplete_SIZE(1);
     ASSERT_EVENTS_InitializationComplete(0, 0x01U);
     ASSERT_TLM_Initialized(0, 1U);
     ASSERT_TLM_Measuring(0, 1U);
     ASSERT_EQ(0x05U, this->m_emulator.registers[0x2B]);
+    // The revision comes from the identity read initialize() already made.
+    ASSERT_EQ(1U, this->m_emulator.transactionsTo(Registers::DEVID_AD, true));
 
     this->m_emulator.setRawSample(256000, -256000, 0);
     AccelerationSample sample;
@@ -41,41 +64,101 @@ void ManagerTester::testConfigureAndRead() {
     ASSERT_CMD_RESPONSE(0, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::OK);
     ASSERT_TLM_RawX(0, 256000);
     ASSERT_TLM_SamplesRead(0, 2U);
+    ASSERT_TLM_StatusRegister(0, 0x01U);
 }
 
 void ManagerTester::testControlCommands() {
-    this->sendCmd_INITIALIZE_SYNCED(0,
-                                    10U,
-                                    SensorRange::G2,
-                                    OutputDataRate::HZ_4000,
-                                    HighPassCorner::OFF);
-    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_INITIALIZE_SYNCED, 10U, Fw::CmdResponse::OK);
+    this->initialize();
 
     this->sendCmd_SET_RANGE(0, 11U, SensorRange::G8);
-    ASSERT_CMD_RESPONSE(1, Manager::OPCODE_SET_RANGE, 11U, Fw::CmdResponse::OK);
+    this->sendCmd_SET_FILTER(0, 12U, OutputDataRate::HZ_1000, HighPassCorner::ODR_X_6_2084E_MINUS_4);
+    this->sendCmd_SET_SYNC(0, 13U, SynchronizationMode::EXTERNAL_WITH_INTERPOLATION, false);
+    this->sendCmd_SET_SYNC(0, 14U, SynchronizationMode::EXTERNAL_NO_INTERPOLATION, true);
+    this->sendCmd_SET_OFFSETS(0, 15U, -1, 2, 3);
+    this->sendCmd_SET_ACTIVITY(0, 16U, 0x07U, 0x0100U, 3U);
+    this->sendCmd_SET_INTERRUPTS(0, 17U, 0x0FU, true);
+    this->sendCmd_SET_FIFO_WATERMARK(0, 18U, 40U);
+    this->sendCmd_SET_SELF_TEST(0, 19U, true, true);
+    this->sendCmd_STOP(0, 20U);
+    ASSERT_TLM_Measuring(this->tlmHistory_Measuring->size() - 1U, 0U);
+    this->sendCmd_START(0, 21U);
+
+    ASSERT_CMD_RESPONSE_SIZE(11);
+    for (U32 index = 0U; index < 11U; ++index) {
+        ASSERT_EQ(Fw::CmdResponse::OK, this->cmdResponseHistory->at(index).response) << index;
+    }
     ASSERT_EQ(0x03U, this->m_emulator.registers[0x2C] & 0x03U);
-
-    this->sendCmd_STOP(0, 12U);
-    ASSERT_CMD_RESPONSE(2, Manager::OPCODE_STOP, 12U, Fw::CmdResponse::OK);
-    ASSERT_EQ(0x01U, this->m_emulator.registers[0x2D] & 0x01U);
-
-    this->sendCmd_START(0, 13U);
-    ASSERT_CMD_RESPONSE(3, Manager::OPCODE_START, 13U, Fw::CmdResponse::OK);
+    ASSERT_EQ(0x40U, this->m_emulator.registers[0x2C] & 0x40U);
+    ASSERT_EQ(0x22U, this->m_emulator.registers[0x28]);
+    ASSERT_EQ(0x05U, this->m_emulator.registers[0x2B]);
+    ASSERT_EQ(0xFFU, this->m_emulator.registers[0x1E]);
+    ASSERT_EQ(0x03U, this->m_emulator.registers[0x23]);
+    ASSERT_EQ(0x07U, this->m_emulator.registers[0x24]);
+    ASSERT_EQ(0x03U, this->m_emulator.registers[0x27]);
+    ASSERT_EQ(0x0FU, this->m_emulator.registers[0x2A]);
+    ASSERT_EQ(40U, this->m_emulator.registers[0x29]);
+    ASSERT_EQ(0x03U, this->m_emulator.registers[0x2E]);
     ASSERT_EQ(0x00U, this->m_emulator.registers[0x2D] & 0x01U);
+    ASSERT_EVENTS_SelfTestState_SIZE(1);
+    ASSERT_EVENTS_SelfTestState(0, true, true);
+    ASSERT_TLM_SelfTest(this->tlmHistory_SelfTest->size() - 1U, 0x03U);
+    ASSERT_TLM_Measuring(this->tlmHistory_Measuring->size() - 1U, 1U);
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
 }
 
-void ManagerTester::testHighRateFailuresAreEdgeReported() {
-    this->component.recordHighRateStatus(Operation::READ_SAMPLE, Status::SPI_ERROR);
-    this->component.recordHighRateStatus(Operation::READ_SAMPLE, Status::SPI_ERROR);
+void ManagerTester::testCommandValidationErrorsAreNotDeviceFaults() {
+    this->sendCmd_SET_RANGE(0, 1U, SensorRange::G4);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_SET_RANGE, 1U, Fw::CmdResponse::EXECUTION_ERROR);
+    this->sendCmd_START(0, 2U);
+    ASSERT_CMD_RESPONSE(1, Manager::OPCODE_START, 2U, Fw::CmdResponse::EXECUTION_ERROR);
+    this->initialize();
 
+    this->sendCmd_SET_FIFO_WATERMARK(0, 3U, 0U);
+    this->sendCmd_SET_ACTIVITY(0, 4U, 0x08U, 1U, 1U);
+    this->sendCmd_SET_SELF_TEST(0, 5U, false, true);
+    this->sendCmd_SET_SYNC(0, 6U, SynchronizationMode::EXTERNAL_NO_INTERPOLATION, false);
+    this->sendCmd_SET_INTERRUPTS(0, 7U, 0x10U, false);
+    ASSERT_CMD_RESPONSE_SIZE(5);
+    for (U32 index = 0U; index < 5U; ++index) {
+        ASSERT_EQ(Fw::CmdResponse::VALIDATION_ERROR, this->cmdResponseHistory->at(index).response) << index;
+    }
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
+    ASSERT_TLM_Errors_SIZE(0);
+
+    this->m_emulator.setRawSample(1, 2, 3);
+    this->sendCmd_READ_SNAPSHOT(0, 8U);
+    ASSERT_TLM_Errors(0, 0U);
+    ASSERT_TLM_Measuring(this->tlmHistory_Measuring->size() - 1U, 1U);
+}
+
+void ManagerTester::testHighRateFailuresAreEdgeReportedAndThrottled() {
+    this->initialize();
+    AccelerationSample sample;
+
+    // Repeated equal failures are counted but evented once.
+    EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
     ASSERT_EVENTS_OperationFailed_SIZE(1);
-    ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::SPI_ERROR);
-    ASSERT_EQ(2U, this->component.m_errors);
+    ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::STALE_DATA);
 
-    this->component.recordHighRateStatus(Operation::READ_SAMPLE, Status::OK);
-    this->component.recordHighRateStatus(Operation::READ_SAMPLE, Status::SPI_ERROR);
-    ASSERT_EVENTS_OperationFailed_SIZE(2);
-    ASSERT_EQ(3U, this->component.m_errors);
+    // An intermittent sensor produces one edge per failure, bounded by the throttle.
+    for (U32 cycle = 0U; cycle < 30U; ++cycle) {
+        this->m_emulator.setRawSample(static_cast<I32>(cycle), 0, 0);
+        EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+        EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    }
+    ASSERT_EVENTS_OperationFailed_SIZE(10);
+
+    this->sendCmd_CLEAR_EVENT_THROTTLE(0, 5U);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_CLEAR_EVENT_THROTTLE, 5U, Fw::CmdResponse::OK);
+    this->m_emulator.setRawSample(1, 0, 0);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    ASSERT_EVENTS_OperationFailed_SIZE(11);
+
+    this->m_emulator.setRawSample(2, 0, 0);
+    this->sendCmd_READ_SNAPSHOT(0, 6U);
+    ASSERT_TLM_Errors(this->tlmHistory_Errors->size() - 1U, 33U);
 }
 
 void ManagerTester::testReadBeforeInitializationIsRejected() {
@@ -84,6 +167,138 @@ void ManagerTester::testReadBeforeInitializationIsRejected() {
     ASSERT_TRUE(this->m_emulator.transactions.empty());
     ASSERT_EVENTS_OperationFailed_SIZE(1);
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::INVALID_STATE);
+
+    this->sendCmd_READ_SNAPSHOT(0, 1U);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_TRUE(this->m_emulator.transactions.empty());
+}
+
+void ManagerTester::testImplausibleBusDataIsRejected() {
+    this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::STUCK_HIGH;
+    EXPECT_EQ(DriverStatus::IDENTITY_MISMATCH, this->invoke_to_configure(0, synchronizedPreset()));
+    ASSERT_TLM_Initialized(0, 0U);
+    ASSERT_EVENTS_OperationFailed(0, Operation::INITIALIZE, DriverStatus::IDENTITY_MISMATCH);
+
+    this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::DRIVEN;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_configure(0, synchronizedPreset()));
+    this->m_emulator.setRawSample(1, 1, 1);
+    AccelerationSample sample;
+    this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::STUCK_HIGH;
+    EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readAcceleration(0, sample));
+    this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::STUCK_LOW;
+    EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::DRIVEN;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+}
+
+void ManagerTester::testHighRateReadNeverWaitsForAControlOperation() {
+    this->initialize();
+    this->m_emulator.setRawSample(5, 5, 5);
+
+    // READ_SNAPSHOT owns the gate during its SPI transfers; a read arriving
+    // then must return BUSY immediately rather than block.
+    this->m_reentry = Reentry::READ_ACCELERATION;
+    this->sendCmd_READ_SNAPSHOT(0, 1U);
+    ASSERT_EQ(DriverStatus::BUSY, this->m_reentrantStatus);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::OK);
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
+
+    // A control command arriving meanwhile waits a bounded time, then reports.
+    this->m_reentry = Reentry::STOP_COMMAND;
+    this->sendCmd_READ_SNAPSHOT(0, 2U);
+    ASSERT_CMD_RESPONSE_SIZE(3);
+    ASSERT_CMD_RESPONSE(1, Manager::OPCODE_STOP, 9U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_EVENTS_ControlBusy_SIZE(1);
+    ASSERT_EVENTS_ControlBusy(0, Operation::STOP);
+
+    AccelerationSample sample;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+}
+
+void ManagerTester::testFailedInitializationReportsConsistentLifecycle() {
+    this->m_emulator.ignorePowerWrites = true;
+    this->sendCmd_INITIALIZE_SYNCED(0, 1U, SensorRange::G2, OutputDataRate::HZ_4000, HighPassCorner::OFF);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_INITIALIZE_SYNCED, 1U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_TLM_Initialized(0, 0U);
+    ASSERT_TLM_Measuring(0, 0U);
+    ASSERT_EVENTS_OperationFailed_SIZE(1);
+    ASSERT_EVENTS_OperationFailed(0, Operation::INITIALIZE, DriverStatus::VERIFY_ERROR);
+
+    this->sendCmd_START(0, 2U);
+    ASSERT_CMD_RESPONSE(1, Manager::OPCODE_START, 2U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_EVENTS_OperationFailed_SIZE(1);
+}
+
+void ManagerTester::testTemperatureAndMeasurementControlPorts() {
+    this->m_emulator.setTemperature(1885U);
+    TemperatureSample temperature;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readTemperature(0, temperature));
+    EXPECT_NEAR(25.0, temperature.getcelsius(), 0.0001);
+    this->m_emulator.temperatureReads = {0x100U, 0x1FFU, 0x0FFU};
+    EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readTemperature(0, temperature));
+    ASSERT_EVENTS_OperationFailed(0, Operation::READ_TEMPERATURE, DriverStatus::IMPLAUSIBLE_DATA);
+
+    EXPECT_EQ(DriverStatus::INVALID_STATE, this->invoke_to_measurementControl(0, true));
+    this->initialize();
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_measurementControl(0, false));
+    ASSERT_EVENTS_MeasurementState(0, false);
+    ASSERT_TLM_Measuring(0, 0U);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_measurementControl(0, true));
+    ASSERT_TLM_Measuring(1, 1U);
+}
+
+void ManagerTester::testSnapshotDoesNotConsumeDataReady() {
+    this->initialize();
+    this->m_emulator.setRawSample(7, 8, 9);
+    this->sendCmd_READ_SNAPSHOT(0, 1U);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::OK);
+    ASSERT_TLM_RawX(0, 7);
+
+    AccelerationSample sample;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(7, sample.getrawX());
+}
+
+void ManagerTester::testNvmMismatchIsReported() {
+    this->m_emulator.corruptShadowResets = Device::MAX_RESET_ATTEMPTS;
+    EXPECT_EQ(DriverStatus::NVM_MISMATCH, this->invoke_to_configure(0, synchronizedPreset()));
+    ASSERT_EVENTS_OperationFailed(0, Operation::INITIALIZE, DriverStatus::NVM_MISMATCH);
+    ASSERT_TLM_Initialized(0, 0U);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_configure(0, synchronizedPreset()));
+}
+
+void ManagerTester::testFailedSelfTestInvalidatesTheDevice() {
+    this->initialize();
+    this->m_emulator.ignoreWriteAddress = Registers::SELF_TEST;
+    this->sendCmd_SET_SELF_TEST(0, 1U, true, false);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_SET_SELF_TEST, 1U, Fw::CmdResponse::EXECUTION_ERROR);
+    ASSERT_EVENTS_OperationFailed(0, Operation::SET_SELF_TEST, DriverStatus::VERIFY_ERROR);
+    ASSERT_TLM_Initialized(0, 0U);
+    ASSERT_EVENTS_SelfTestState_SIZE(0);
+}
+
+void ManagerTester::testEveryControlPathReportsBusyWithoutBlocking() {
+    this->initialize();
+    this->m_emulator.setRawSample(1, 2, 3);
+    this->m_reentry = Reentry::EVERY_CONTROL;
+    this->sendCmd_READ_SNAPSHOT(0, 1U);
+
+    // Every command waited a bounded time, reported, and changed nothing.
+    ASSERT_CMD_RESPONSE_SIZE(15);
+    for (U32 index = 0U; index < 14U; ++index) {
+        ASSERT_EQ(Fw::CmdResponse::EXECUTION_ERROR, this->cmdResponseHistory->at(index).response) << index;
+    }
+    ASSERT_CMD_RESPONSE(14, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::OK);
+    ASSERT_EVENTS_ControlBusy_SIZE(17);
+    for (U32 index = 0U; index < 3U; ++index) {
+        ASSERT_EQ(DriverStatus::BUSY, this->m_reentrantPortStatus[index]) << index;
+    }
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
+    ASSERT_EQ(0x00U, this->m_emulator.registers[0x2E]);
+    ASSERT_EQ(0x00U, this->m_emulator.registers[0x2D] & 0x01U);
+
+    AccelerationSample sample;
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
 }
 
 void ManagerTester::from_spi_handler(const NATIVE_INT_TYPE portNum,
@@ -91,7 +306,36 @@ void ManagerTester::from_spi_handler(const NATIVE_INT_TYPE portNum,
                                      Fw::Buffer& readBuffer) {
     (void)portNum;
     ASSERT_EQ(writeBuffer.getSize(), readBuffer.getSize());
-    ASSERT_TRUE(this->m_emulator.transfer(writeBuffer.getData(), readBuffer.getData(), writeBuffer.getSize()));
+    const Reentry reentry = this->m_reentry;
+    this->m_reentry = Reentry::NONE;
+    if (reentry == Reentry::READ_ACCELERATION) {
+        AccelerationSample sample;
+        this->m_reentrantStatus = this->invoke_to_readAcceleration(0, sample);
+    } else if (reentry == Reentry::STOP_COMMAND) {
+        this->sendCmd_STOP(0, 9U);
+    } else if (reentry == Reentry::EVERY_CONTROL) {
+        this->sendCmd_INITIALIZE_SYNCED(0, 20U, SensorRange::G2, OutputDataRate::HZ_4000, HighPassCorner::OFF);
+        this->sendCmd_START(0, 21U);
+        this->sendCmd_STOP(0, 22U);
+        this->sendCmd_SET_RANGE(0, 23U, SensorRange::G8);
+        this->sendCmd_SET_FILTER(0, 24U, OutputDataRate::HZ_1000, HighPassCorner::OFF);
+        this->sendCmd_SET_SYNC(0, 25U, SynchronizationMode::INTERNAL, false);
+        this->sendCmd_SET_OFFSETS(0, 26U, 1, 2, 3);
+        this->sendCmd_SET_ACTIVITY(0, 27U, 0x01U, 1U, 1U);
+        this->sendCmd_SET_INTERRUPTS(0, 28U, 0x01U, false);
+        this->sendCmd_SET_SELF_TEST(0, 29U, true, false);
+        this->sendCmd_SET_FIFO_WATERMARK(0, 30U, 10U);
+        this->sendCmd_READ_SNAPSHOT(0, 31U);
+        this->sendCmd_CLEAR_EVENT_THROTTLE(0, 32U);
+        this->sendCmd_INITIALIZE_SYNCED(0, 33U, SensorRange::G4, OutputDataRate::HZ_4000, HighPassCorner::OFF);
+        this->m_reentrantPortStatus[0] = this->invoke_to_configure(0, DeviceConfiguration());
+        TemperatureSample temperature;
+        this->m_reentrantPortStatus[1] = this->invoke_to_readTemperature(0, temperature);
+        this->m_reentrantPortStatus[2] = this->invoke_to_measurementControl(0, false);
+    }
+    // Drv.SpiReadWrite has no status; like the flight driver, a failed
+    // emulator transfer is visible only through the returned bytes.
+    (void)this->m_emulator.transfer(writeBuffer.getData(), readBuffer.getData(), writeBuffer.getSize());
 }
 
 }  // namespace Adxl355

@@ -11,7 +11,7 @@ framework_path: ./fprime
 library_locations: ../../../libraries/fprime-adxl355
 ```
 
-The library's `library.cmake` registers all five targets. Regenerate the build after changing FPP or library locations:
+Set up the F Prime 3.5.1 Python tools as described in [Testing](testing.md#f-prime-tool-chain); on macOS that installs the platform-independent fpp tools. The library's `library.cmake` registers all six targets. Regenerate the build after changing FPP or library locations:
 
 ```sh
 fprime-util generate --ut
@@ -79,7 +79,7 @@ flowchart TD
     Acquire --> Monitor
 ```
 
-Do not let a periodic trigger race startup. The application begins disabled as a fail-safe default; also keep the upstream timing source disabled until initialization has produced the expected mask and the command sequence explicitly enables acquisition.
+Do not let a periodic trigger race startup. The application begins disabled as a fail-safe default and rejects reconfiguration while enabled; also keep the upstream timing source disabled until initialization has produced the expected mask and the command sequence explicitly enables acquisition. After starting the synchronization pulses, wait at least one filter group delay before enabling acquisition; the first one to three samples after the first pulse can be lost or corrupted.
 
 ## SPI driver initialization
 
@@ -147,12 +147,13 @@ Each `PlatformSpi` instance must bind one chip select for the full transfer. The
 Before merging the library into an application deployment:
 
 - allocate nonoverlapping base IDs and connect command, event, telemetry, text-event, and time patterns;
-- define one execution context for acquisition and serialize manager commands against it;
+- invoke `acquireFrame` from one timing task, expect `BUSY` for a sensor whose manager is executing a command, and size command-dispatcher health pings for the documented initialization bound;
 - verify SPI mode, maximum frequency, chip-select ownership, buffer limits, and startup order;
-- decide whether the deployment needs a status-bearing SPI boundary instead of the F Prime 3.5.1 void-status port;
+- decide whether the freshness and plausibility checks are sufficient or the deployment needs a status-bearing SPI boundary instead of the F Prime 3.5.1 void-status port;
 - budget and then measure stack usage and worst-case execution time under representative load;
 - keep 4 kHz raw frames on a dedicated data path rather than ordinary channel telemetry;
-- specify health-monitor and retry policy for missing clock, invalid masks, sequence gaps, and repeated failures; and
+- specify health-monitor and retry policy for a missing clock (`STALE_DATA`), a lost synchronization pulse train, invalid masks, sequence gaps and `SkippedTriggers`, `NVM_MISMATCH`, and repeated failures;
+- power-cycle the sensors before the first initialization after a flight-software restart where possible (NVM shadow reference); and
 - treat calibration, axis alignment, and science filtering as application responsibilities.
 
 The full rationale and evidence are in the [practice audit](practices-audit.md) and [requirements-to-verification matrix](requirements-and-verification.md).

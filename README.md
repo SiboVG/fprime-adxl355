@@ -8,7 +8,7 @@ The supplied board preset configures every sensor for:
 - external synchronization without interpolation;
 - a 1.024 MHz external clock on `INT2`;
 - a synchronization pulse on `DRDY/SYNC`; and
-- sequential 10-byte SPI reads that preserve a common sampling instant.
+- sequential 14-byte, status-checked SPI reads that preserve a common sampling instant and reject stale or implausible data.
 
 ## Architecture
 
@@ -35,7 +35,8 @@ The register-protocol core has no dependency on F Prime or a particular operatin
 | F Prime target | Purpose |
 | --- | --- |
 | `Adxl355_Types` | FPP enums, structs, arrays, and typed ports |
-| `Adxl355_Device` | Register protocol, configuration, conversions, FIFO, and controls |
+| `Adxl355_Device` | Register protocol, configuration, conversions, FIFO, controls, and the non-blocking `AccessGate` |
+| `Adxl355_Platform` | F Prime OS delay adapter for the portable `Delay` interface |
 | `Adxl355_Array` | Framework-independent seven-device frame aggregator |
 | `Adxl355_Manager` | One device manager connected to a generic `Drv.SpiReadWrite` driver |
 | `Adxl355_Application` | Initializes and sequentially reads up to seven managers per FPGA sync instant |
@@ -56,12 +57,13 @@ The CubeSpec LED tutorial is registered through `sandbox/tutorials/led-blinker/s
 ## Automated assurance
 
 The repository workflow at `.github/workflows/adxl355.yml` builds the portable
-host unit/integration tests, documentation contracts, and strict MkDocs site.
-Independent jobs run address/undefined-behavior sanitizers, enforce an 80%
-production line-coverage gate, and run `clang-tidy` with warnings treated as
-errors. The generated F Prime component tests are a separate verification step
-run through the registered CubeSpec sandbox; they have passed locally but are
-not currently a job in this workflow.
+host unit/integration tests, documentation contracts, the evidence-manifest
+check, and a strict MkDocs site. Independent jobs run address/undefined-behavior
+sanitizers, enforce line and branch coverage gates on the portable core, and run
+the generated F Prime component tests against F Prime v3.5.1 with a component
+line-coverage gate. `clang-tidy` runs with warnings treated as errors on both the
+core and the component sources. Executed results are retained in `docs/evidence/`
+and pinned to the exact sources; a remote workflow run has not yet been observed.
 
 Pending hardware execution includes the physical Raspberry Pi/EVAL-ADXL355Z
 bring-up, external-clock and synchronization captures, seven-sensor

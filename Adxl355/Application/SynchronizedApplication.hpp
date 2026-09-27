@@ -2,15 +2,28 @@
 #define ADXL355_APPLICATION_SYNCHRONIZED_APPLICATION_HPP
 
 #include "Adxl355/Application/SynchronizedApplicationComponentAc.hpp"
+#include "Adxl355/Device/AccessGate.hpp"
+#include "Adxl355/Platform/OsDelay.hpp"
+
+#include <atomic>
 
 namespace Adxl355 {
 
+//! Execution context: acquireFrame runs on the timing thread; commands run on
+//! the command dispatcher thread. The frame body and every reconfiguration run
+//! under m_gate. State read by REPORT or by the trigger before it owns the gate
+//! is atomic; everything else is touched only by the gate owner.
 class SynchronizedApplication final : public SynchronizedApplicationComponentBase {
   public:
+    //! Attempts (1 ms apart) a command makes to take the gate. A frame holds
+    //! it for less than one 250 microsecond period.
+    static const U32 CONTROL_ACQUIRE_ATTEMPTS = 10U;
+
     explicit SynchronizedApplication(const char* const componentName);
     ~SynchronizedApplication();
 
-    bool configure(U8 sensorCount);
+    //! Topology-time sensor count (1 through MAX_SENSORS); acquisition must be disabled.
+    DriverStatus configure(U8 sensorCount);
 
   private:
     void acquireFrame_handler(FwIndexType portNum, U64 syncTimeMicroseconds) override;
@@ -28,17 +41,25 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
                                             SensorRange range,
                                             OutputDataRate outputDataRate,
                                             HighPassCorner highPassCorner) override;
+    void CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
 
-    void initializeAll(FwOpcodeType opCode, U32 commandSequence, DeviceConfiguration& configuration);
+    void initializeAll(FwOpcodeType opCode, U32 commandSequence, const DeviceConfiguration& configuration);
+    void rejectBusy(FwOpcodeType opCode, U32 commandSequence);
+    void rejectWhileEnabled(FwOpcodeType opCode, U32 commandSequence);
+    void clearEventThrottles();
     void reportTelemetry();
 
-    U8 m_sensorCount;
-    bool m_enabled;
-    U64 m_sequence;
-    U64 m_frames;
-    U64 m_partialFrames;
-    U8 m_lastValidMask;
-    U8 m_initializedMask;
+    OsDelay m_delay;
+    AccessGate m_gate;
+    std::atomic<bool> m_enabled;
+    std::atomic<bool> m_throttleClearRequested;
+    std::atomic<U8> m_sensorCount;
+    std::atomic<U8> m_initializedMask;
+    std::atomic<U8> m_lastValidMask;
+    std::atomic<U64> m_sequence;
+    std::atomic<U64> m_frames;
+    std::atomic<U64> m_partialFrames;
+    std::atomic<U64> m_skippedTriggers;
 };
 
 }  // namespace Adxl355

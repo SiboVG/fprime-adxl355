@@ -1,6 +1,9 @@
 module Adxl355 {
 
   @ Application layer that reads all managers after an FPGA synchronization instant.
+  @ acquireFrame runs on the timing thread and never waits: if a command owns
+  @ the application gate the trigger is skipped, counted, and still consumes a
+  @ sequence number. Reconfiguration commands require acquisition disabled.
   passive component SynchronizedApplication {
 
     sync input port acquireFrame: Adxl355.AcquireFrame
@@ -24,6 +27,9 @@ module Adxl355 {
       highPassCorner: Adxl355.HighPassCorner
     )
 
+    @ Re-arm throttled frame events; applied by the next frame while enabled.
+    sync command CLEAR_EVENT_THROTTLE
+
     event SensorCountChanged(sensorCount: U8) severity activity high \
       format "ADXL355 synchronized sensor count set to {}"
     event AcquisitionStateChanged(enabled: bool) severity activity low \
@@ -33,9 +39,13 @@ module Adxl355 {
     event ArrayInitializationIncomplete(initializedMask: U8, expectedMask: U8) severity warning high \
       format "ADXL355 array initialization incomplete; mask 0x{x}, expected 0x{x}"
     event FrameIncomplete(sequence: U64, validMask: U8) severity warning high \
-      format "ADXL355 frame {} incomplete; valid mask 0x{x}"
+      format "ADXL355 frame {} incomplete; valid mask 0x{x}" throttle 10
     event FrameRecovered(sequence: U64) severity activity high \
-      format "ADXL355 frame {} restored all sensors"
+      format "ADXL355 frame {} restored all sensors" throttle 10
+    event ReconfigurationRejected severity warning low \
+      format "ADXL355 reconfiguration rejected: disable acquisition first"
+    event ApplicationBusy severity warning low \
+      format "ADXL355 application command rejected: frame in progress"
 
     telemetry Frames: U64
     telemetry PartialFrames: U64
@@ -43,6 +53,8 @@ module Adxl355 {
     telemetry SensorCount: U8
     telemetry Enabled: U8
     telemetry InitializedMask: U8
+    @ Enabled triggers dropped because the previous frame or a command owned the gate
+    telemetry SkippedTriggers: U64
 
     time get port timeCaller
     command reg port cmdRegOut

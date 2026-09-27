@@ -217,4 +217,4 @@ The synchronized application must be triggered from the timing source associated
 | Sensor 0 works but sensor 1 fails | Verify CE1 physical pin 26 reaches only sensor 1 P2 pin 2 and `/dev/spidev0.1` exists |
 | Two internal-mode sensors appear phase shifted | Expected: internal oscillators are independent; use the external-clock/sync wiring for coherence |
 
-Use a logic analyzer to confirm SCLK idles low, only one CS is low at a time, and each direct sample read contains one command byte followed by nine data bytes.
+Use a logic analyzer to confirm SCLK idles low, only one CS is low at a time, each acquisition read contains one command byte (0x09) followed by thirteen status/data bytes, and each `READ_SNAPSHOT` sample read contains one command byte (0x11) followed by nine data bytes.

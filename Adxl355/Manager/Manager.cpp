@@ -1,8 +1,7 @@
 #include "Adxl355/Manager/Manager.hpp"
 
 #include "Fw/Buffer/Buffer.hpp"
-#include "Fw/Time/TimeInterval.hpp"
-#include "Os/Task.hpp"
+#include "Fw/Types/Assert.hpp"
 
 namespace Adxl355 {
 
@@ -17,14 +16,10 @@ bool Manager::PortSpiBus::transfer(const std::uint8_t* transmit,
     }
     Fw::Buffer writeBuffer(const_cast<U8*>(reinterpret_cast<const U8*>(transmit)), static_cast<U32>(size));
     Fw::Buffer readBuffer(reinterpret_cast<U8*>(receive), static_cast<U32>(size));
+    // Drv.SpiReadWrite in F Prime 3.5.1 returns no status; bus faults surface
+    // through the device core's status, identity, and readback checks.
     this->m_owner.spi_out(0, writeBuffer, readBuffer);
     return true;
-}
-
-void Manager::OsDelay::delayMilliseconds(std::uint32_t milliseconds) {
-    const U32 seconds = static_cast<U32>(milliseconds / 1000U);
-    const U32 microseconds = static_cast<U32>((milliseconds % 1000U) * 1000U);
-    (void)Os::Task::delay(Fw::TimeInterval(seconds, microseconds));
 }
 
 Manager::Manager(const char* const componentName)
@@ -32,37 +27,32 @@ Manager::Manager(const char* const componentName)
       m_spiBus(*this),
       m_delay(),
       m_device(this->m_spiBus, this->m_delay),
+      m_gate(),
       m_samplesRead(0U),
       m_errors(0U),
       m_lastHighRateStatus(Status::OK) {}
 
 Manager::~Manager() {}
 
-DriverStatus Manager::configure_handler(FwIndexType portNum, DeviceConfiguration& configuration) {
+DriverStatus Manager::configure_handler(FwIndexType portNum, const DeviceConfiguration& configuration) {
     (void)portNum;
-    const Status status = this->m_device.initialize(Manager::toCoreConfiguration(configuration));
-    if (status == Status::OK) {
-        Identity identity;
-        const Status identityStatus = this->m_device.readIdentity(identity);
-        if (identityStatus != Status::OK) {
-            this->recordStatus(Operation::INITIALIZE, identityStatus);
-            return Manager::toFppStatus(identityStatus);
-        }
-        this->log_ACTIVITY_HI_InitializationComplete(identity.revisionId);
-        this->tlmWrite_Initialized(1U);
-        this->tlmWrite_Measuring(1U);
-        this->tlmWrite_LastStatus(DriverStatus::OK);
-        this->m_lastHighRateStatus = Status::OK;
-    } else {
-        this->tlmWrite_Initialized(0U);
-        this->recordStatus(Operation::INITIALIZE, status);
+    if (!this->acquireForControl(Operation::INITIALIZE)) {
+        return DriverStatus::BUSY;
     }
-    return Manager::toFppStatus(status);
+    GateHold hold(this->m_gate, true);
+    return Manager::toFppStatus(this->initializeDevice(Manager::toCoreConfiguration(configuration)));
 }
 
 DriverStatus Manager::readAcceleration_handler(FwIndexType portNum, AccelerationSample& sample) {
     (void)portNum;
-    if (!this->m_device.isInitialized() || !this->m_device.isMeasuring()) {
+    // The 4 kHz path never waits: a control operation in progress costs this
+    // sensor one frame instead of stalling every sensor behind it. Nothing is
+    // recorded without the gate, because the counters belong to its owner.
+    GateHold hold(this->m_gate, this->m_gate.tryAcquire());
+    if (!hold.held()) {
+        return DriverStatus::BUSY;
+    }
+    if (!this->m_device.isMeasuring()) {
         this->recordHighRateStatus(Operation::READ_SAMPLE, Status::INVALID_STATE);
         return DriverStatus::INVALID_STATE;
     }
@@ -76,15 +66,17 @@ DriverStatus Manager::readAcceleration_handler(FwIndexType portNum, Acceleration
                    coreSample.yMetersPerSecondSquared,
                    coreSample.zMetersPerSecondSquared);
         ++this->m_samplesRead;
-        this->recordHighRateStatus(Operation::READ_SAMPLE, Status::OK);
-    } else {
-        this->recordHighRateStatus(Operation::READ_SAMPLE, status);
     }
+    this->recordHighRateStatus(Operation::READ_SAMPLE, status);
     return Manager::toFppStatus(status);
 }
 
 DriverStatus Manager::readTemperature_handler(FwIndexType portNum, TemperatureSample& sample) {
     (void)portNum;
+    if (!this->acquireForControl(Operation::READ_TEMPERATURE)) {
+        return DriverStatus::BUSY;
+    }
+    GateHold hold(this->m_gate, true);
     Temperature coreTemperature;
     const Status status = this->m_device.readTemperature(coreTemperature);
     if (status == Status::OK) {
@@ -97,14 +89,17 @@ DriverStatus Manager::readTemperature_handler(FwIndexType portNum, TemperatureSa
 
 DriverStatus Manager::measurementControl_handler(FwIndexType portNum, bool enable) {
     (void)portNum;
+    const Operation operation = enable ? Operation::START : Operation::STOP;
+    if (!this->acquireForControl(operation)) {
+        return DriverStatus::BUSY;
+    }
+    GateHold hold(this->m_gate, true);
     const Status status = enable ? this->m_device.startMeasurement() : this->m_device.stopMeasurement();
     if (status == Status::OK) {
         this->log_ACTIVITY_LO_MeasurementState(enable);
-        this->tlmWrite_Measuring(enable ? 1U : 0U);
-        this->tlmWrite_LastStatus(DriverStatus::OK);
-    } else {
-        this->recordStatus(enable ? Operation::START : Operation::STOP, status);
     }
+    this->recordStatus(operation, status);
+    this->publishLifecycle();
     return Manager::toFppStatus(status);
 }
 
@@ -113,85 +108,89 @@ void Manager::INITIALIZE_SYNCED_cmdHandler(FwOpcodeType opCode,
                                            SensorRange rangeValue,
                                            OutputDataRate outputDataRate,
                                            HighPassCorner highPassCorner) {
+    if (!this->acquireForControl(Operation::INITIALIZE)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
     Configuration configuration = Configuration::externalSynchronized4kHz();
     configuration.range = static_cast<Range>(rangeValue.e);
     configuration.outputDataRate = static_cast<OdrSetting>(outputDataRate.e);
     configuration.highPassCorner = static_cast<HpfSetting>(highPassCorner.e);
-    const Status status = this->m_device.initialize(configuration);
-    if (status == Status::OK) {
-        Identity identity;
-        const Status identityStatus = this->m_device.readIdentity(identity);
-        if (identityStatus != Status::OK) {
-            this->recordStatus(Operation::INITIALIZE, identityStatus);
-            this->respond(opCode, commandSequence, identityStatus);
-            return;
-        }
-        this->log_ACTIVITY_HI_InitializationComplete(identity.revisionId);
-        this->tlmWrite_Initialized(1U);
-        this->tlmWrite_Measuring(1U);
-        this->tlmWrite_LastStatus(DriverStatus::OK);
-        this->m_lastHighRateStatus = Status::OK;
-    } else {
-        this->tlmWrite_Initialized(0U);
-        this->recordStatus(Operation::INITIALIZE, status);
-    }
-    this->respond(opCode, commandSequence, status);
+    this->respond(opCode, commandSequence, this->initializeDevice(configuration));
 }
 
 void Manager::START_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
+    if (!this->acquireForControl(Operation::START)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
     const Status status = this->m_device.startMeasurement();
     if (status == Status::OK) {
         this->log_ACTIVITY_LO_MeasurementState(true);
-        this->tlmWrite_Measuring(1U);
-        this->tlmWrite_LastStatus(DriverStatus::OK);
-    } else {
-        this->recordStatus(Operation::START, status);
     }
-    this->respond(opCode, commandSequence, status);
+    this->runControl(opCode, commandSequence, Operation::START, status);
 }
 
 void Manager::STOP_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
+    if (!this->acquireForControl(Operation::STOP)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
     const Status status = this->m_device.stopMeasurement();
     if (status == Status::OK) {
         this->log_ACTIVITY_LO_MeasurementState(false);
-        this->tlmWrite_Measuring(0U);
-        this->tlmWrite_LastStatus(DriverStatus::OK);
-    } else {
-        this->recordStatus(Operation::STOP, status);
     }
-    this->respond(opCode, commandSequence, status);
+    this->runControl(opCode, commandSequence, Operation::STOP, status);
 }
 
 void Manager::SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, SensorRange rangeValue) {
-    const Status status = this->m_device.setRange(static_cast<Range>(rangeValue.e));
-    this->recordStatus(Operation::SET_RANGE, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_RANGE)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_RANGE,
+                     this->m_device.setRange(static_cast<Range>(rangeValue.e)));
 }
 
 void Manager::SET_FILTER_cmdHandler(FwOpcodeType opCode,
                                     U32 commandSequence,
                                     OutputDataRate outputDataRate,
                                     HighPassCorner highPassCorner) {
-    const Status status = this->m_device.setFilter(static_cast<OdrSetting>(outputDataRate.e),
-                                                   static_cast<HpfSetting>(highPassCorner.e));
-    this->recordStatus(Operation::SET_FILTER, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_FILTER)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_FILTER,
+                     this->m_device.setFilter(static_cast<OdrSetting>(outputDataRate.e),
+                                              static_cast<HpfSetting>(highPassCorner.e)));
 }
 
 void Manager::SET_SYNC_cmdHandler(FwOpcodeType opCode,
                                   U32 commandSequence,
                                   SynchronizationMode synchronizationMode,
                                   bool externalClock) {
-    const Status status = this->m_device.setSynchronization(static_cast<SyncMode>(synchronizationMode.e),
-                                                            externalClock);
-    this->recordStatus(Operation::SET_SYNCHRONIZATION, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_SYNCHRONIZATION)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_SYNCHRONIZATION,
+                     this->m_device.setSynchronization(static_cast<SyncMode>(synchronizationMode.e),
+                                                       externalClock));
 }
 
 void Manager::SET_OFFSETS_cmdHandler(FwOpcodeType opCode, U32 commandSequence, I16 x, I16 y, I16 z) {
-    const Status status = this->m_device.setOffsets(x, y, z);
-    this->recordStatus(Operation::SET_OFFSETS, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_OFFSETS)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_OFFSETS, this->m_device.setOffsets(x, y, z));
 }
 
 void Manager::SET_ACTIVITY_cmdHandler(FwOpcodeType opCode,
@@ -199,48 +198,76 @@ void Manager::SET_ACTIVITY_cmdHandler(FwOpcodeType opCode,
                                       U8 axisMask,
                                       U16 threshold,
                                       U8 count) {
-    const Status status = this->m_device.configureActivity(axisMask, threshold, count);
-    this->recordStatus(Operation::SET_ACTIVITY, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_ACTIVITY)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_ACTIVITY,
+                     this->m_device.configureActivity(axisMask, threshold, count));
 }
 
 void Manager::SET_INTERRUPTS_cmdHandler(FwOpcodeType opCode,
                                         U32 commandSequence,
                                         U8 interruptMap,
                                         bool activeHigh) {
-    const Status status = this->m_device.configureInterrupts(interruptMap, activeHigh);
-    this->recordStatus(Operation::SET_INTERRUPTS, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_INTERRUPTS)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_INTERRUPTS,
+                     this->m_device.configureInterrupts(interruptMap, activeHigh));
 }
 
 void Manager::SET_SELF_TEST_cmdHandler(FwOpcodeType opCode,
                                        U32 commandSequence,
-                                       bool stimulateAxis1,
-                                       bool stimulateAxis2) {
-    const Status status = this->m_device.setSelfTest(stimulateAxis1, stimulateAxis2);
-    this->recordStatus(Operation::SET_SELF_TEST, status);
-    this->respond(opCode, commandSequence, status);
+                                       bool enableMode,
+                                       bool applyForce) {
+    if (!this->acquireForControl(Operation::SET_SELF_TEST)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    const Status status = this->m_device.setSelfTest(enableMode, applyForce);
+    if (status == Status::OK) {
+        this->log_ACTIVITY_HI_SelfTestState(enableMode, applyForce);
+    }
+    this->runControl(opCode, commandSequence, Operation::SET_SELF_TEST, status);
 }
 
 void Manager::SET_FIFO_WATERMARK_cmdHandler(FwOpcodeType opCode, U32 commandSequence, U8 watermark) {
-    const Status status = this->m_device.setFifoWatermark(watermark);
-    this->recordStatus(Operation::SET_FIFO_WATERMARK, status);
-    this->respond(opCode, commandSequence, status);
+    if (!this->acquireForControl(Operation::SET_FIFO_WATERMARK)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->runControl(opCode, commandSequence, Operation::SET_FIFO_WATERMARK,
+                     this->m_device.setFifoWatermark(watermark));
 }
 
 void Manager::READ_SNAPSHOT_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
-    if (!this->m_device.isInitialized() || !this->m_device.isMeasuring()) {
+    if (!this->acquireForControl(Operation::READ_SAMPLE)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    if (!this->m_device.isMeasuring()) {
         this->recordStatus(Operation::READ_SAMPLE, Status::INVALID_STATE);
         this->respond(opCode, commandSequence, Status::INVALID_STATE);
         return;
     }
-    Sample sample;
-    Status status = this->m_device.readSample(sample);
+    // A STATUS read here would clear DATA_RDY and make the next acquisition
+    // read of this sensor stale, so the snapshot reads only the data registers.
+    RawSample raw;
+    Status status = this->m_device.readRawSample(raw);
     if (status != Status::OK) {
         this->recordStatus(Operation::READ_SAMPLE, status);
         this->respond(opCode, commandSequence, status);
         return;
     }
+    Sample sample;
+    this->m_device.scale(raw, sample);
     ++this->m_samplesRead;
     this->emitSampleTelemetry(sample);
 
@@ -252,22 +279,52 @@ void Manager::READ_SNAPSHOT_cmdHandler(FwOpcodeType opCode, U32 commandSequence)
         return;
     }
     this->tlmWrite_TemperatureCelsius(temperature.celsius);
-
-    StatusRegister statusRegister;
-    status = this->m_device.readStatus(statusRegister);
-    if (status != Status::OK) {
-        this->recordStatus(Operation::READ_STATUS, status);
-        this->respond(opCode, commandSequence, status);
-        return;
-    }
-    this->tlmWrite_StatusRegister(statusRegister.raw);
-    if (statusRegister.fifoOverrun) {
-        this->log_WARNING_HI_FifoOverrun(statusRegister.raw);
-    }
+    this->tlmWrite_StatusRegister(this->m_device.lastStatusRegister());
     this->tlmWrite_SamplesRead(this->m_samplesRead);
     this->tlmWrite_Errors(this->m_errors);
     this->tlmWrite_LastStatus(DriverStatus::OK);
+    this->publishLifecycle();
     this->respond(opCode, commandSequence, Status::OK);
+}
+
+void Manager::CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
+    if (!this->acquireForControl(Operation::CLEAR_EVENT_THROTTLE)) {
+        this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
+        return;
+    }
+    GateHold hold(this->m_gate, true);
+    this->log_WARNING_HI_OperationFailed_ThrottleClear();
+    this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::OK);
+}
+
+bool Manager::acquireForControl(Operation operation) {
+    if (this->m_gate.acquire(this->m_delay, CONTROL_ACQUIRE_ATTEMPTS)) {
+        return true;
+    }
+    // ControlBusy is not throttled, so emitting it without the gate touches no
+    // state shared with the gate owner.
+    this->log_WARNING_LO_ControlBusy(operation);
+    return false;
+}
+
+void Manager::runControl(FwOpcodeType opCode, U32 commandSequence, Operation operation, Status status) {
+    this->recordStatus(operation, status);
+    this->publishLifecycle();
+    this->respond(opCode, commandSequence, status);
+}
+
+Status Manager::initializeDevice(const Configuration& configuration) {
+    const Status status = this->m_device.initialize(configuration);
+    if (status == Status::OK) {
+        this->log_WARNING_HI_OperationFailed_ThrottleClear();
+        this->m_lastHighRateStatus = Status::OK;
+        this->log_ACTIVITY_HI_InitializationComplete(this->m_device.identity().revisionId);
+        this->tlmWrite_LastStatus(DriverStatus::OK);
+    } else {
+        this->recordStatus(Operation::INITIALIZE, status);
+    }
+    this->publishLifecycle();
+    return status;
 }
 
 DriverStatus Manager::toFppStatus(Status status) {
@@ -296,9 +353,18 @@ DriverStatus Manager::toFppStatus(Status status) {
             return DriverStatus::FIFO_EMPTY;
         case Status::CAPACITY_EXCEEDED:
             return DriverStatus::CAPACITY_EXCEEDED;
-        default:
-            return DriverStatus::INVALID_STATE;
+        case Status::BUSY:
+            return DriverStatus::BUSY;
+        case Status::STALE_DATA:
+            return DriverStatus::STALE_DATA;
+        case Status::IMPLAUSIBLE_DATA:
+            return DriverStatus::IMPLAUSIBLE_DATA;
+        case Status::NVM_MISMATCH:
+            return DriverStatus::NVM_MISMATCH;
     }
+    // Unreachable: every core status has an FPP mapping.
+    FW_ASSERT(0, static_cast<FwAssertArgType>(status));
+    return DriverStatus::INVALID_STATE;
 }
 
 Configuration Manager::toCoreConfiguration(const DeviceConfiguration& configuration) {
@@ -316,14 +382,22 @@ Configuration Manager::toCoreConfiguration(const DeviceConfiguration& configurat
     return core;
 }
 
+bool Manager::isOperatorError(Status status) {
+    // Rejected arguments and out-of-sequence commands are reported by the
+    // command response; they are not evidence of a device fault.
+    return (status == Status::INVALID_ARGUMENT) || (status == Status::INVALID_CONFIGURATION) ||
+           (status == Status::INVALID_STATE);
+}
+
 void Manager::recordStatus(Operation operation, Status status) {
     const DriverStatus fppStatus = Manager::toFppStatus(status);
     this->tlmWrite_LastStatus(fppStatus);
-    if (status != Status::OK) {
-        ++this->m_errors;
-        this->tlmWrite_Errors(this->m_errors);
-        this->log_WARNING_HI_OperationFailed(operation, fppStatus);
+    if ((status == Status::OK) || Manager::isOperatorError(status)) {
+        return;
     }
+    ++this->m_errors;
+    this->tlmWrite_Errors(this->m_errors);
+    this->log_WARNING_HI_OperationFailed(operation, fppStatus);
 }
 
 void Manager::recordHighRateStatus(Operation operation, Status status) {
@@ -337,6 +411,8 @@ void Manager::recordHighRateStatus(Operation operation, Status status) {
 
     ++this->m_errors;
     if (status != this->m_lastHighRateStatus) {
+        // Edge-reported and throttled: an intermittent sensor alternating
+        // between OK and failure cannot flood the event stream.
         const DriverStatus fppStatus = Manager::toFppStatus(status);
         this->tlmWrite_LastStatus(fppStatus);
         this->log_WARNING_HI_OperationFailed(operation, fppStatus);
@@ -352,6 +428,12 @@ void Manager::respond(FwOpcodeType opCode, U32 commandSequence, Status status) {
         response = Fw::CmdResponse::VALIDATION_ERROR;
     }
     this->cmdResponse_out(opCode, commandSequence, response);
+}
+
+void Manager::publishLifecycle() {
+    this->tlmWrite_Initialized(this->m_device.isInitialized() ? 1U : 0U);
+    this->tlmWrite_Measuring(this->m_device.isMeasuring() ? 1U : 0U);
+    this->tlmWrite_SelfTest(this->m_device.selfTestBits());
 }
 
 void Manager::emitSampleTelemetry(const Sample& sample) {

@@ -1,0 +1,16 @@
+# Host tests under AddressSanitizer and UndefinedBehaviorSanitizer
+# Recorded 2026-09-27T15:38Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 3.5.1 (sandbox checkout); fpp 2.2.1 JVM wheels via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools linker ld-27037.1
+
+$ cmake -S tests -B build-san -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+$ ASAN_OPTIONS=halt_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ctest --test-dir build-san --output-on-failure
+Test project build-san
+    Start 1: adxl355-unit-tests
+1/3 Test #1: adxl355-unit-tests ...............   Passed    0.03 sec
+    Start 2: adxl355-integration-tests
+2/3 Test #2: adxl355-integration-tests ........   Passed    0.02 sec
+    Start 3: adxl355-gate-tests
+3/3 Test #3: adxl355-gate-tests ...............   Passed    0.04 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Total Test time (real) =   0.09 sec

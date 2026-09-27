@@ -55,7 +55,7 @@ Status SynchronizedArray::readFrame(std::uint64_t syncTimeMicroseconds, Synchron
     bool allRead = true;
     for (std::size_t index = 0U; index < this->m_count; ++index) {
         Device& device = *this->m_devices[index];
-        frame.sensorStatus[index] = (device.isInitialized() && device.isMeasuring())
+        frame.sensorStatus[index] = device.isMeasuring()
                                         ? device.readSample(frame.samples[index])
                                         : Status::INVALID_STATE;
         if (frame.sensorStatus[index] == Status::OK) {

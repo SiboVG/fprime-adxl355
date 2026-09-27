@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,9 @@ LIBRARY_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = LIBRARY_ROOT
 WORKSPACE_ROOT = LIBRARY_ROOT.parents[1]
 SHARED_PRACTICES = WORKSPACE_ROOT / "docs/engineering-practices/fprime.md"
+
+sys.path.insert(0, str(LIBRARY_ROOT / "tests"))
+import check_evidence  # noqa: E402
 
 
 def mermaid_diagrams(relative_path: str) -> list[str]:
@@ -176,10 +180,6 @@ class DocumentationTests(unittest.TestCase):
         )
         missing = [relative_path for relative_path in expected_files if not (LIBRARY_ROOT / relative_path).is_file()]
         self.assertEqual([], missing, f"missing practice files: {missing}")
-        self.assertTrue(
-            SHARED_PRACTICES.is_file(),
-            f"missing workspace practice guide: {SHARED_PRACTICES}",
-        )
 
         mkdocs = (LIBRARY_ROOT / "mkdocs.yml").read_text(encoding="utf-8")
         for page in (
@@ -190,6 +190,20 @@ class DocumentationTests(unittest.TestCase):
                 self.assertIn(page, mkdocs)
         self.assertNotIn("jpl-fprime-practices.md", mkdocs)
 
+        audit = (LIBRARY_ROOT / "docs/practices-audit.md").read_text(encoding="utf-8")
+        self.assertIn("## Conformance matrix", audit)
+        self.assertIn("## Integrator actions", audit)
+        self.assertIn("status-bearing SPI", audit)
+
+        agent_guidance = (LIBRARY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("../../docs/engineering-practices/fprime.md", agent_guidance)
+        self.assertIn("docs/practices-audit.md", agent_guidance)
+
+    @unittest.skipUnless(
+        SHARED_PRACTICES.is_file(),
+        "workspace practice guide is only present in the FlightSoftware workspace layout",
+    )
+    def test_workspace_practice_guide_has_the_audited_sections(self) -> None:
         practices = SHARED_PRACTICES.read_text(encoding="utf-8")
         for heading in (
             "## Requirements and traceability",
@@ -201,15 +215,6 @@ class DocumentationTests(unittest.TestCase):
         ):
             with self.subTest(heading=heading):
                 self.assertIn(heading, practices)
-
-        audit = (LIBRARY_ROOT / "docs/practices-audit.md").read_text(encoding="utf-8")
-        self.assertIn("## Conformance matrix", audit)
-        self.assertIn("## Integrator actions", audit)
-        self.assertIn("status-bearing SPI", audit)
-
-        agent_guidance = (LIBRARY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("../../docs/engineering-practices/fprime.md", agent_guidance)
-        self.assertIn("docs/practices-audit.md", agent_guidance)
 
     def test_raspberry_pi_example_is_complete_and_discoverable(self) -> None:
         expected_files = (
@@ -256,10 +261,14 @@ class DocumentationTests(unittest.TestCase):
         for required_text in (
             "adxl355-host-tests",
             "ADXL355_ENABLE_COVERAGE=ON",
-            "--fail-under-line 80",
+            "--fail-under-line",
+            "--fail-under-branch",
             "clang-tidy",
             "--warnings-as-errors=*",
+            "Adxl355/Manager/Manager.cpp",
+            "Adxl355/Application/SynchronizedApplication.cpp",
             "mkdocs build --strict",
+            "check_evidence.py",
         ):
             with self.subTest(text=required_text):
                 self.assertIn(required_text, workflow)
@@ -268,54 +277,88 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("option(ADXL355_ENABLE_COVERAGE", host_cmake)
         self.assertTrue((LIBRARY_ROOT / ".clang-tidy").is_file())
 
-    def test_practice_audit_matches_ci_tooling_and_current_evidence(self) -> None:
+    def test_generated_component_tests_run_in_ci_with_a_coverage_gate(self) -> None:
+        workflow = (REPOSITORY_ROOT / ".github/workflows/adxl355.yml").read_text(encoding="utf-8")
+        readme = " ".join((LIBRARY_ROOT / "README.md").read_text(encoding="utf-8").split())
+        testing = " ".join((LIBRARY_ROOT / "docs/testing.md").read_text(encoding="utf-8").split())
+
+        for executable in ("Adxl355_Manager_ut_exe", "Adxl355_Application_ut_exe"):
+            with self.subTest(executable=executable):
+                self.assertIn(executable, workflow)
+        self.assertIn("Adxl355/(Manager|Application|Platform)/", workflow)
+        self.assertNotIn("separate verification step", readme)
+        self.assertNotIn("not yet part of", testing)
+
+    def test_practice_audit_points_to_retained_evidence(self) -> None:
         audit = (LIBRARY_ROOT / "docs/practices-audit.md").read_text(encoding="utf-8")
         architecture = (LIBRARY_ROOT / "docs/architecture.md").read_text(encoding="utf-8")
 
         self.assertIn("clang-tidy", audit)
-        self.assertNotIn("clang-analyzer", audit)
-        self.assertNotIn("static-analysis/coverage evidence", architecture)
-        self.assertIn("local static-analysis execution", architecture)
+        self.assertIn("docs/evidence/", audit)
+        self.assertIn("docs/evidence/", architecture)
+        self.assertNotIn("Boolean invariants", architecture)
 
     def test_testing_guide_uses_the_actual_static_analysis_tool(self) -> None:
         testing = (LIBRARY_ROOT / "docs/testing.md").read_text(encoding="utf-8")
 
         self.assertIn("clang-tidy", testing)
-        self.assertNotIn("clang-analyzer", testing)
+        self.assertNotIn("clang-analyzer checks, warnings", testing)
+
+    def test_measured_coverage_lives_in_evidence_not_prose(self) -> None:
+        pinned = re.compile(r"\b\d+ of \d+ (?:production )?lines\b|\b\d+\.\d+%")
+        for relative_path in (
+            "README.md",
+            "docs/index.md",
+            "docs/testing.md",
+            "docs/practices-audit.md",
+            "docs/architecture.md",
+        ):
+            text = (LIBRARY_ROOT / relative_path).read_text(encoding="utf-8")
+            with self.subTest(page=relative_path):
+                self.assertIsNone(pinned.search(text), "measured numbers belong in docs/evidence")
+        for evidence in (
+            "coverage.txt",
+            "host-tests.txt",
+            "component-tests.txt",
+            "sanitizers.txt",
+            "static-analysis.txt",
+            "source-sha256.json",
+        ):
+            with self.subTest(evidence=evidence):
+                self.assertTrue((LIBRARY_ROOT / "docs/evidence" / evidence).is_file())
+
+    def test_evidence_manifest_matches_the_sources(self) -> None:
+        self.assertEqual([], check_evidence.problems())
 
     def test_readme_and_testing_summarize_current_assurance_state(self) -> None:
-        readme = (LIBRARY_ROOT / "README.md").read_text(encoding="utf-8")
-        testing = (LIBRARY_ROOT / "docs/testing.md").read_text(encoding="utf-8")
-        normalized_readme = " ".join(readme.split())
-        normalized_testing = " ".join(testing.split())
+        readme = " ".join((LIBRARY_ROOT / "README.md").read_text(encoding="utf-8").split())
+        testing = " ".join((LIBRARY_ROOT / "docs/testing.md").read_text(encoding="utf-8").split())
 
         for token in (
             ".github/workflows/adxl355.yml",
             "sanitizers",
-            "80% production line-coverage gate",
             "clang-tidy",
+            "docs/evidence/",
             "Pending hardware execution",
         ):
             with self.subTest(readme_token=token):
-                self.assertIn(token, normalized_readme)
+                self.assertIn(token, readme)
 
         for token in (
-            "473 of 548",
-            "86.3%",
-            "local `clang-tidy` execution remains open",
-            "physical Raspberry Pi and flight-target HIL remain open",
+            "check_evidence.py",
+            "Physical Raspberry Pi and flight-target HIL remain open",
         ):
             with self.subTest(testing_token=token):
-                self.assertIn(token, normalized_testing)
+                self.assertIn(token, testing)
 
-    def test_docs_do_not_claim_generated_component_tests_run_in_current_ci(self) -> None:
-        workflow = (REPOSITORY_ROOT / ".github/workflows/adxl355.yml").read_text(encoding="utf-8")
-        readme = " ".join((LIBRARY_ROOT / "README.md").read_text(encoding="utf-8").split())
-        testing = " ".join((LIBRARY_ROOT / "docs/testing.md").read_text(encoding="utf-8").split())
+    def test_timing_documents_match_the_status_checked_burst(self) -> None:
+        hardware = " ".join((LIBRARY_ROOT / "docs/hardware-integration.md").read_text(encoding="utf-8").split())
+        architecture = " ".join((LIBRARY_ROOT / "docs/architecture.md").read_text(encoding="utf-8").split())
 
-        self.assertNotIn("Adxl355_Manager_ut_exe", workflow)
-        self.assertIn("generated F Prime component tests are a separate verification step", readme)
-        self.assertIn("not yet part of `.github/workflows/adxl355.yml`", testing)
+        self.assertIn("7 sensors x 14 bytes", hardware)
+        self.assertNotIn("10 bytes x 8 bits", hardware)
+        self.assertIn("78.4 microseconds", architecture)
+        self.assertIn("STALE_DATA", architecture)
 
 
 if __name__ == "__main__":

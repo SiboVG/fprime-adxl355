@@ -1,0 +1,88 @@
+# Generated F Prime component tests
+# Recorded 2026-09-27T15:38Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 3.5.1 (sandbox checkout); fpp 2.2.1 JVM wheels via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools linker ld-27037.1
+
+$ cmake -S tests/fprime-consumer -B build-components -DFPRIME_FRAMEWORK_PATH=<fprime 3.5.1> && cmake --build build-components --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
+
+$ build-components/bin/Darwin/Adxl355_Manager_ut_exe
+[==========] Running 13 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from Nominal
+[ RUN      ] Nominal.ConfigureAndRead
+[       OK ] Nominal.ConfigureAndRead (1 ms)
+[ RUN      ] Nominal.ControlCommands
+[       OK ] Nominal.ControlCommands (1 ms)
+[ RUN      ] Nominal.TemperatureAndMeasurementControlPorts
+[       OK ] Nominal.TemperatureAndMeasurementControlPorts (1 ms)
+[ RUN      ] Nominal.SnapshotDoesNotConsumeDataReady
+[       OK ] Nominal.SnapshotDoesNotConsumeDataReady (1 ms)
+[----------] 4 tests from Nominal (5 ms total)
+
+[----------] 7 tests from OffNominal
+[ RUN      ] OffNominal.CommandValidationErrorsAreNotDeviceFaults
+[       OK ] OffNominal.CommandValidationErrorsAreNotDeviceFaults (1 ms)
+[ RUN      ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled
+[       OK ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled (1 ms)
+[ RUN      ] OffNominal.ReadBeforeInitializationIsRejected
+[       OK ] OffNominal.ReadBeforeInitializationIsRejected (0 ms)
+[ RUN      ] OffNominal.ImplausibleBusDataIsRejected
+[       OK ] OffNominal.ImplausibleBusDataIsRejected (1 ms)
+[ RUN      ] OffNominal.FailedInitializationReportsConsistentLifecycle
+[       OK ] OffNominal.FailedInitializationReportsConsistentLifecycle (1 ms)
+[ RUN      ] OffNominal.NvmMismatchIsReported
+[       OK ] OffNominal.NvmMismatchIsReported (5 ms)
+[ RUN      ] OffNominal.FailedSelfTestInvalidatesTheDevice
+[       OK ] OffNominal.FailedSelfTestInvalidatesTheDevice (1 ms)
+[----------] 7 tests from OffNominal (12 ms total)
+
+[----------] 2 tests from Concurrency
+[ RUN      ] Concurrency.HighRateReadNeverWaitsForAControlOperation
+[       OK ] Concurrency.HighRateReadNeverWaitsForAControlOperation (12 ms)
+[ RUN      ] Concurrency.EveryControlPathReportsBusyWithoutBlocking
+[       OK ] Concurrency.EveryControlPathReportsBusyWithoutBlocking (194 ms)
+[----------] 2 tests from Concurrency (207 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 3 test suites ran. (225 ms total)
+[  PASSED  ] 13 tests.
+exit status: 0
+
+$ build-components/bin/Darwin/Adxl355_Application_ut_exe
+[==========] Running 12 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from Nominal
+[ RUN      ] Nominal.SevenSensorFrame
+[       OK ] Nominal.SevenSensorFrame (0 ms)
+[ RUN      ] Nominal.InitializeAllInternalMode
+[       OK ] Nominal.InitializeAllInternalMode (0 ms)
+[ RUN      ] Nominal.AcquisitionStartsDisabled
+[       OK ] Nominal.AcquisitionStartsDisabled (0 ms)
+[ RUN      ] Nominal.DisabledAcquisitionDoesNoWork
+[       OK ] Nominal.DisabledAcquisitionDoesNoWork (0 ms)
+[ RUN      ] Nominal.EnablingRestartsEdgeDetection
+[       OK ] Nominal.EnablingRestartsEdgeDetection (0 ms)
+[----------] 5 tests from Nominal (1 ms total)
+
+[----------] 5 tests from OffNominal
+[ RUN      ] OffNominal.InitializeAllReportsPartialMask
+[       OK ] OffNominal.InitializeAllReportsPartialMask (0 ms)
+[ RUN      ] OffNominal.InvalidSensorCountsAreRejected
+[       OK ] OffNominal.InvalidSensorCountsAreRejected (0 ms)
+[ RUN      ] OffNominal.PartialFrameIsEdgeReportedAndRecovers
+[       OK ] OffNominal.PartialFrameIsEdgeReportedAndRecovers (0 ms)
+[ RUN      ] OffNominal.ReconfigurationIsRejectedWhileEnabled
+[       OK ] OffNominal.ReconfigurationIsRejectedWhileEnabled (0 ms)
+[ RUN      ] OffNominal.IntermittentSensorEventsAreThrottled
+[       OK ] OffNominal.IntermittentSensorEventsAreThrottled (0 ms)
+[----------] 5 tests from OffNominal (1 ms total)
+
+[----------] 2 tests from Concurrency
+[ RUN      ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap
+[       OK ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap (0 ms)
+[ RUN      ] Concurrency.CommandsDuringInitializationReportBusy
+[       OK ] Concurrency.CommandsDuringInitializationReportBusy (22 ms)
+[----------] 2 tests from Concurrency (23 ms total)
+
+[----------] Global test environment tear-down
+[==========] 12 tests from 3 test suites ran. (26 ms total)
+[  PASSED  ] 12 tests.
+exit status: 0

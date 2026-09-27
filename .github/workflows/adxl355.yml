@@ -10,6 +10,7 @@ on:
       - "library.cmake"
       - "mkdocs.yml"
       - "requirements-docs.txt"
+      - ".clang-tidy"
       - ".github/workflows/adxl355.yml"
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - "library.cmake"
       - "mkdocs.yml"
       - "requirements-docs.txt"
+      - ".clang-tidy"
       - ".github/workflows/adxl355.yml"
   workflow_dispatch:
 
@@ -35,10 +37,12 @@ jobs:
         run: cmake -S tests -B build-adxl355-tests -G Ninja
       - name: Build host tests
         run: cmake --build build-adxl355-tests
-      - name: Run host unit and integration tests
+      - name: Run host unit, integration, and gate tests
         run: ctest --test-dir build-adxl355-tests --output-on-failure
       - name: Run documentation contracts
         run: python3 tests/DocumentationTests.py
+      - name: Check retained evidence matches the sources
+        run: python3 tests/check_evidence.py
 
   sanitizers:
     runs-on: ubuntu-24.04
@@ -76,11 +80,13 @@ jobs:
         run: >-
           cmake --build build-adxl355-coverage &&
           ctest --test-dir build-adxl355-coverage --output-on-failure
-      - name: Enforce production line coverage
+      - name: Enforce portable-core line and branch coverage
         run: >-
           gcovr --root . --object-directory build-adxl355-coverage
           --filter 'Adxl355/(Device|Array)/'
-          --fail-under-line 80 --xml-pretty --output adxl355-coverage.xml
+          --exclude-throw-branches --exclude-unreachable-branches
+          --fail-under-line 95 --fail-under-branch 80
+          --xml-pretty --output adxl355-coverage.xml
           build-adxl355-coverage
       - uses: actions/upload-artifact@v7
         with:
@@ -103,7 +109,54 @@ jobs:
         run: >-
           clang-tidy --warnings-as-errors=* -p build-adxl355-static
           Adxl355/Device/Device.cpp
+          Adxl355/Device/AccessGate.cpp
           Adxl355/Array/SynchronizedArray.cpp
+
+  fprime-components:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: nasa/fprime
+          ref: v3.5.1
+          path: fprime
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install F Prime and analysis tooling
+        run: >-
+          python -m pip install -r fprime/requirements.txt "gcovr==8.6" &&
+          sudo apt-get update && sudo apt-get install -y clang-tidy ninja-build
+      - name: Generate the component consumer with coverage
+        run: >-
+          cmake -S tests/fprime-consumer -B build-components -G Ninja
+          -DFPRIME_FRAMEWORK_PATH="$GITHUB_WORKSPACE/fprime"
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          -DCMAKE_CXX_FLAGS=--coverage
+          -DCMAKE_EXE_LINKER_FLAGS=--coverage
+      - name: Build generated component tests
+        run: >-
+          cmake --build build-components
+          --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
+      - name: Run manager component tests
+        run: build-components/bin/Linux/Adxl355_Manager_ut_exe
+      - name: Run application component tests
+        run: build-components/bin/Linux/Adxl355_Application_ut_exe
+      - name: Enforce component line coverage
+        run: >-
+          gcovr --root . --filter 'Adxl355/(Manager|Application|Platform)/[^/]+\.cpp'
+          --gcov-ignore-errors=no_working_dir_found
+          --fail-under-line 85
+          build-components/Adxl355
+      - name: Analyze F Prime component sources
+        run: >-
+          clang-tidy --warnings-as-errors=* -p build-components
+          Adxl355/Manager/Manager.cpp
+          Adxl355/Application/SynchronizedApplication.cpp
+          Adxl355/Platform/OsDelay.cpp
 
   documentation:
     runs-on: ubuntu-24.04

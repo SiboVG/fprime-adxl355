@@ -35,6 +35,31 @@ TEST(Nominal, DisabledAcquisitionDoesNoWork) {
     tester.testDisabledAcquisitionDoesNoWork();
 }
 
+TEST(OffNominal, ReconfigurationIsRejectedWhileEnabled) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testReconfigurationIsRejectedWhileEnabled();
+}
+
+TEST(OffNominal, IntermittentSensorEventsAreThrottled) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testIntermittentSensorEventsAreThrottled();
+}
+
+TEST(Concurrency, OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testOverlappingTriggerIsSkippedCountedAndLeavesASequenceGap();
+}
+
+TEST(Concurrency, CommandsDuringInitializationReportBusy) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testCommandsDuringInitializationReportBusy();
+}
+
+TEST(Nominal, EnablingRestartsEdgeDetection) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testEnablingRestartsEdgeDetection();
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

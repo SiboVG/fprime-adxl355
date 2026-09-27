@@ -16,6 +16,14 @@ module Adxl355 {
     FIFO_MISALIGNED = 9
     FIFO_EMPTY = 10
     CAPACITY_EXCEEDED = 11
+    @ A control operation owns the manager; the high-rate read did not wait
+    BUSY = 12
+    @ DATA_RDY was clear: no sample newer than the previous status read
+    STALE_DATA = 13
+    @ Bus data cannot have come from an ADXL355 (reserved bits set or unstable)
+    IMPLAUSIBLE_DATA = 14
+    @ Factory trim shadow registers differ after every allowed software reset
+    NVM_MISMATCH = 15
   }
 
   enum SensorRange {
@@ -69,6 +77,7 @@ module Adxl355 {
     SET_INTERRUPTS
     SET_SELF_TEST
     SET_FIFO_WATERMARK
+    CLEAR_EVENT_THROTTLE
   }
 
   struct DeviceConfiguration {
@@ -110,13 +119,14 @@ module Adxl355 {
     sensorStatus: DriverStatusArray
   }
 
-  @ Configure and initialize one ADXL355
-  port Configure(ref configuration: DeviceConfiguration) -> DriverStatus
+  @ Configure and initialize one ADXL355. The configuration is input only.
+  port Configure(configuration: DeviceConfiguration) -> DriverStatus
 
-  @ Read one coherent X/Y/Z register burst
+  @ Read one status-checked X/Y/Z burst; sample is written only on OK.
+  @ Never blocks: returns BUSY when a control operation owns the manager.
   port ReadAcceleration(ref sample: AccelerationSample) -> DriverStatus
 
-  @ Read the non-double-buffered temperature register pair
+  @ Read the non-double-buffered temperature pair until two reads agree
   port ReadTemperature(ref sample: TemperatureSample) -> DriverStatus
 
   @ Start or stop measurement mode
