@@ -17,7 +17,7 @@ class Manager final : public ManagerComponentBase {
     explicit Manager(const char* const componentName);
     ~Manager();
 
-  PRIVATE:
+  private:
     class PortSpiBus final : public SpiBus {
       public:
         explicit PortSpiBus(Manager& owner);
@@ -34,19 +34,19 @@ class Manager final : public ManagerComponentBase {
 
     void INITIALIZE_SYNCED_cmdHandler(FwOpcodeType opCode,
                                       U32 commandSequence,
-                                      SensorRange range,
-                                      OutputDataRate outputDataRate,
-                                      HighPassCorner highPassCorner) override;
+                                      const SensorRange& range,
+                                      const OutputDataRate& outputDataRate,
+                                      const HighPassCorner& highPassCorner) override;
     void START_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
     void STOP_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
-    void SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, SensorRange range) override;
+    void SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, const SensorRange& range) override;
     void SET_FILTER_cmdHandler(FwOpcodeType opCode,
                                U32 commandSequence,
-                               OutputDataRate outputDataRate,
-                               HighPassCorner highPassCorner) override;
+                               const OutputDataRate& outputDataRate,
+                               const HighPassCorner& highPassCorner) override;
     void SET_SYNC_cmdHandler(FwOpcodeType opCode,
                              U32 commandSequence,
-                             SynchronizationMode synchronizationMode,
+                             const SynchronizationMode& synchronizationMode,
                              bool externalClock) override;
     void SET_OFFSETS_cmdHandler(FwOpcodeType opCode,
                                 U32 commandSequence,

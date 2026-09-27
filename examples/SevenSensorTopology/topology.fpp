@@ -41,13 +41,13 @@ module CubeSpec {
     }
 
     connections Adxl355Spi {
-      adxl355Manager0.spi -> adxl355Spi0.SpiReadWrite
-      adxl355Manager1.spi -> adxl355Spi1.SpiReadWrite
-      adxl355Manager2.spi -> adxl355Spi2.SpiReadWrite
-      adxl355Manager3.spi -> adxl355Spi3.SpiReadWrite
-      adxl355Manager4.spi -> adxl355Spi4.SpiReadWrite
-      adxl355Manager5.spi -> adxl355Spi5.SpiReadWrite
-      adxl355Manager6.spi -> adxl355Spi6.SpiReadWrite
+      adxl355Manager0.spi -> adxl355Spi0.SpiWriteRead
+      adxl355Manager1.spi -> adxl355Spi1.SpiWriteRead
+      adxl355Manager2.spi -> adxl355Spi2.SpiWriteRead
+      adxl355Manager3.spi -> adxl355Spi3.SpiWriteRead
+      adxl355Manager4.spi -> adxl355Spi4.SpiWriteRead
+      adxl355Manager5.spi -> adxl355Spi5.SpiWriteRead
+      adxl355Manager6.spi -> adxl355Spi6.SpiWriteRead
     }
 
     # Add these connections in the containing deployment, using its concrete

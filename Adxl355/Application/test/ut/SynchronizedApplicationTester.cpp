@@ -41,10 +41,10 @@ void SynchronizedApplicationTester::testInitializeAllReportsPartialMask() {
         ASSERT_EQ(1U, this->m_configureCalls[index]);
     }
     ASSERT_EQ(SynchronizationMode::EXTERNAL_NO_INTERPOLATION,
-              this->m_lastConfiguration.getsynchronizationMode());
-    ASSERT_TRUE(this->m_lastConfiguration.getexternalClock());
-    ASSERT_EQ(OutputDataRate::HZ_4000, this->m_lastConfiguration.getoutputDataRate());
-    ASSERT_EQ(0U, this->m_lastConfiguration.getinterruptMap());
+              this->m_lastConfiguration.get_synchronizationMode());
+    ASSERT_TRUE(this->m_lastConfiguration.get_externalClock());
+    ASSERT_EQ(OutputDataRate::HZ_4000, this->m_lastConfiguration.get_outputDataRate());
+    ASSERT_EQ(0U, this->m_lastConfiguration.get_interruptMap());
 }
 
 void SynchronizedApplicationTester::testInitializeAllInternalMode() {
@@ -67,10 +67,10 @@ void SynchronizedApplicationTester::testInitializeAllInternalMode() {
     for (U32 index = 2U; index < MAX_SENSORS; ++index) {
         ASSERT_EQ(0U, this->m_configureCalls[index]);
     }
-    ASSERT_EQ(SynchronizationMode::INTERNAL, this->m_lastConfiguration.getsynchronizationMode());
-    ASSERT_FALSE(this->m_lastConfiguration.getexternalClock());
-    ASSERT_EQ(SensorRange::G4, this->m_lastConfiguration.getrange());
-    ASSERT_EQ(OutputDataRate::HZ_125, this->m_lastConfiguration.getoutputDataRate());
+    ASSERT_EQ(SynchronizationMode::INTERNAL, this->m_lastConfiguration.get_synchronizationMode());
+    ASSERT_FALSE(this->m_lastConfiguration.get_externalClock());
+    ASSERT_EQ(SensorRange::G4, this->m_lastConfiguration.get_range());
+    ASSERT_EQ(OutputDataRate::HZ_125, this->m_lastConfiguration.get_outputDataRate());
 }
 
 void SynchronizedApplicationTester::testInvalidSensorCountsAreRejected() {
@@ -110,12 +110,12 @@ void SynchronizedApplicationTester::testSevenSensorFrame() {
     this->invoke_to_acquireFrame(0, 1000000U);
 
     ASSERT_EQ(1U, this->m_frameCalls);
-    ASSERT_EQ(0U, this->m_lastFrame.getsequence());
-    ASSERT_EQ(1000000U, this->m_lastFrame.getsyncTimeMicroseconds());
-    ASSERT_EQ(0x7FU, this->m_lastFrame.getvalidMask());
-    ASSERT_EQ(7U, this->m_lastFrame.getsensorCount());
-    ASSERT_EQ(1, this->m_lastFrame.getsamples()[0].getrawX());
-    ASSERT_EQ(7, this->m_lastFrame.getsamples()[6].getrawX());
+    ASSERT_EQ(0U, this->m_lastFrame.get_sequence());
+    ASSERT_EQ(1000000U, this->m_lastFrame.get_syncTimeMicroseconds());
+    ASSERT_EQ(0x7FU, this->m_lastFrame.get_validMask());
+    ASSERT_EQ(7U, this->m_lastFrame.get_sensorCount());
+    ASSERT_EQ(1, this->m_lastFrame.get_samples()[0].get_rawX());
+    ASSERT_EQ(7, this->m_lastFrame.get_samples()[6].get_rawX());
     for (U32 index = 0U; index < MAX_SENSORS; ++index) {
         ASSERT_EQ(1U, this->m_sensorCalls[index]);
     }
@@ -127,8 +127,8 @@ void SynchronizedApplicationTester::testPartialFrameIsEdgeReportedAndRecovers() 
     ASSERT_CMD_RESPONSE(0, SynchronizedApplication::OPCODE_SET_ENABLED, 2U, Fw::CmdResponse::OK);
     this->m_sensorStatus[2] = DriverStatus::SPI_ERROR;
     this->invoke_to_acquireFrame(0, 10U);
-    ASSERT_EQ(0x7BU, this->m_lastFrame.getvalidMask());
-    ASSERT_EQ(DriverStatus::SPI_ERROR, this->m_lastFrame.getsensorStatus()[2]);
+    ASSERT_EQ(0x7BU, this->m_lastFrame.get_validMask());
+    ASSERT_EQ(DriverStatus::SPI_ERROR, this->m_lastFrame.get_sensorStatus()[2]);
     ASSERT_EVENTS_FrameIncomplete_SIZE(1);
     ASSERT_EVENTS_FrameIncomplete(0, 0U, 0x7BU);
 
@@ -218,10 +218,10 @@ void SynchronizedApplicationTester::testOverlappingTriggerIsSkippedCountedAndLea
     this->m_reentry = Reentry::TRIGGER;
     this->invoke_to_acquireFrame(0, 10U);
     ASSERT_EQ(1U, this->m_frameCalls);
-    ASSERT_EQ(0U, this->m_lastFrame.getsequence());
+    ASSERT_EQ(0U, this->m_lastFrame.get_sequence());
 
     this->invoke_to_acquireFrame(0, 20U);
-    ASSERT_EQ(2U, this->m_lastFrame.getsequence());
+    ASSERT_EQ(2U, this->m_lastFrame.get_sequence());
 
     this->sendCmd_REPORT(0, 2U);
     ASSERT_TLM_SkippedTriggers(0, 1U);
@@ -257,7 +257,7 @@ void SynchronizedApplicationTester::testEnablingRestartsEdgeDetection() {
     ASSERT_CMD_RESPONSE(3, SynchronizedApplication::OPCODE_SET_ENABLED, 4U, Fw::CmdResponse::OK);
 }
 
-DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const NATIVE_INT_TYPE portNum,
+DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const FwIndexType portNum,
                                                                     AccelerationSample& sample) {
     if (this->m_reentry == Reentry::TRIGGER) {
         this->m_reentry = Reentry::NONE;
@@ -274,7 +274,7 @@ DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const NATIVE
 }
 
 DriverStatus SynchronizedApplicationTester::from_configureSensor_handler(
-    const NATIVE_INT_TYPE portNum,
+    const FwIndexType portNum,
     const DeviceConfiguration& configuration) {
     if (this->m_reentry == Reentry::ENABLE_AND_COUNT) {
         this->m_reentry = Reentry::NONE;
@@ -286,7 +286,7 @@ DriverStatus SynchronizedApplicationTester::from_configureSensor_handler(
     return this->m_configureStatus[portNum];
 }
 
-void SynchronizedApplicationTester::from_frameReady_handler(const NATIVE_INT_TYPE portNum, SampleFrame& frame) {
+void SynchronizedApplicationTester::from_frameReady_handler(const FwIndexType portNum, SampleFrame& frame) {
     (void)portNum;
     this->m_lastFrame = frame;
     ++this->m_frameCalls;

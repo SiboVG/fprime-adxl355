@@ -2,7 +2,7 @@
 
 ## Add the library to an F Prime project
 
-Place or reference `libraries/fprime-adxl355` outside the consuming project root, then add it to `settings.ini`. The workspace LED tutorial uses:
+Place or reference `libraries/fprime-adxl355` outside the consuming project root, then add it to `settings.ini`, for example:
 
 ```ini
 [fprime]
@@ -11,14 +11,14 @@ framework_path: ./fprime
 library_locations: ../../../libraries/fprime-adxl355
 ```
 
-Set up the F Prime 3.5.1 Python tools as described in [Testing](testing.md#f-prime-tool-chain); on macOS that installs the platform-independent fpp tools. The library's `library.cmake` registers all six targets. Regenerate the build after changing FPP or library locations:
+The consuming project must use F Prime at the tested revision; set up its Python tools as described in [Testing](testing.md#f-prime-tool-chain). The library's `library.cmake` registers all six targets. Regenerate the build after changing FPP or library locations:
 
 ```sh
 fprime-util generate --ut
 fprime-util build
 ```
 
-The CubeSpec `sandbox/tutorials/led-blinker/settings.ini` already contains this registration. Consumers outside this workspace should use the relative or absolute path appropriate to their checkout.
+Use the relative or absolute path appropriate to the consuming checkout. The workspace's LED tutorial sandbox pins F Prime 3.5.1, so it does not register this library.
 
 For Raspberry Pi 4 wiring, SPI0 setup, one- and two-board command sequences, and external synchronization, follow the [Raspberry Pi 4 bench example](raspberry-pi-4.md). Its copyable FPP fragments are in `examples/RaspberryPi4`.
 
@@ -34,7 +34,7 @@ connections Adxl355Managers {
 }
 
 connections Adxl355Spi {
-  adxl355Manager0.spi -> adxl355Spi0.SpiReadWrite
+  adxl355Manager0.spi -> adxl355Spi0.SpiWriteRead
   # Repeat indices 1 through 6
 }
 ```
@@ -94,7 +94,7 @@ const bool opened = adxl355Spi0.open(
 );
 ```
 
-Repeat for all chip selects. A device-tree/controller configuration must expose seven CS endpoints. On the flight Zynq design, replace these Linux instances with the project platform driver while preserving `Drv.SpiReadWrite`, mode 0, chip-select ownership, and the 10 MHz maximum.
+Repeat for all chip selects. A device-tree/controller configuration must expose seven CS endpoints. On the flight Zynq design, replace these Linux instances with the project platform driver while preserving `Drv.SpiWriteRead`, mode 0, chip-select ownership, and the 10 MHz maximum.
 
 ## Operational example
 
@@ -149,7 +149,7 @@ Before merging the library into an application deployment:
 - allocate nonoverlapping base IDs and connect command, event, telemetry, text-event, and time patterns;
 - invoke `acquireFrame` from one timing task, expect `BUSY` for a sensor whose manager is executing a command, and size command-dispatcher health pings for the documented initialization bound;
 - verify SPI mode, maximum frequency, chip-select ownership, buffer limits, and startup order;
-- decide whether the freshness and plausibility checks are sufficient or the deployment needs a status-bearing SPI boundary instead of the F Prime 3.5.1 void-status port;
+- use a platform SPI driver that reports failures through `Drv.SpiWriteRead` (as `Drv.LinuxSpiDriver` and fprime-zephyr's `ZephyrSpiDriver` do), and test injected controller failures end to end;
 - budget and then measure stack usage and worst-case execution time under representative load;
 - keep 4 kHz raw frames on a dedicated data path rather than ordinary channel telemetry;
 - specify health-monitor and retry policy for a missing clock (`STALE_DATA`), a lost synchronization pulse train, invalid masks, sequence gaps and `SkippedTriggers`, `NVM_MISMATCH`, and repeated failures;

@@ -9,8 +9,8 @@ namespace Adxl355 {
 
 class SynchronizedApplicationTester final : public SynchronizedApplicationGTestBase {
   public:
-    static const NATIVE_INT_TYPE MAX_HISTORY_SIZE = 200;
-    static const NATIVE_INT_TYPE TEST_INSTANCE_ID = 0;
+    static const U32 MAX_HISTORY_SIZE = 200;
+    static const FwEnumStoreType TEST_INSTANCE_ID = 0;
 
     SynchronizedApplicationTester();
     ~SynchronizedApplicationTester();
@@ -34,10 +34,10 @@ class SynchronizedApplicationTester final : public SynchronizedApplicationGTestB
     void connectPorts();
     void initComponents();
 
-    DriverStatus from_configureSensor_handler(const NATIVE_INT_TYPE portNum,
+    DriverStatus from_configureSensor_handler(const FwIndexType portNum,
                                               const DeviceConfiguration& configuration);
-    DriverStatus from_readSensor_handler(const NATIVE_INT_TYPE portNum, AccelerationSample& sample);
-    void from_frameReady_handler(const NATIVE_INT_TYPE portNum, SampleFrame& frame);
+    DriverStatus from_readSensor_handler(const FwIndexType portNum, AccelerationSample& sample);
+    void from_frameReady_handler(const FwIndexType portNum, SampleFrame& frame);
 
     DriverStatus m_configureStatus[MAX_SENSORS];
     U32 m_configureCalls[MAX_SENSORS];

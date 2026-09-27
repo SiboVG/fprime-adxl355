@@ -252,7 +252,7 @@ class DocumentationTests(unittest.TestCase):
 
         topology = (LIBRARY_ROOT / "examples/RaspberryPi4/topology.fpp").read_text(encoding="utf-8")
         self.assertIn("adxl355App.configureSensor[0] -> adxl355Manager0.configure", topology)
-        self.assertIn("adxl355Manager1.spi -> adxl355Spi1.SpiReadWrite", topology)
+        self.assertIn("adxl355Manager1.spi -> adxl355Spi1.SpiWriteRead", topology)
 
     def test_ci_enforces_coverage_static_analysis_and_strict_docs(self) -> None:
         workflow_path = REPOSITORY_ROOT / ".github/workflows/adxl355.yml"

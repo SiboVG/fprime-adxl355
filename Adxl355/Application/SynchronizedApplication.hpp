@@ -30,17 +30,17 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
 
     void INITIALIZE_ALL_cmdHandler(FwOpcodeType opCode,
                                    U32 commandSequence,
-                                   SensorRange range,
-                                   OutputDataRate outputDataRate,
-                                   HighPassCorner highPassCorner) override;
+                                   const SensorRange& range,
+                                   const OutputDataRate& outputDataRate,
+                                   const HighPassCorner& highPassCorner) override;
     void SET_SENSOR_COUNT_cmdHandler(FwOpcodeType opCode, U32 commandSequence, U8 sensorCount) override;
     void SET_ENABLED_cmdHandler(FwOpcodeType opCode, U32 commandSequence, bool enabled) override;
     void REPORT_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
     void INITIALIZE_ALL_INTERNAL_cmdHandler(FwOpcodeType opCode,
                                             U32 commandSequence,
-                                            SensorRange range,
-                                            OutputDataRate outputDataRate,
-                                            HighPassCorner highPassCorner) override;
+                                            const SensorRange& range,
+                                            const OutputDataRate& outputDataRate,
+                                            const HighPassCorner& highPassCorner) override;
     void CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
 
     void initializeAll(FwOpcodeType opCode, U32 commandSequence, const DeviceConfiguration& configuration);

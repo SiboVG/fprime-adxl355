@@ -58,9 +58,9 @@ DriverStatus SynchronizedApplication::configure(const U8 sensorCount) {
 
 void SynchronizedApplication::INITIALIZE_ALL_cmdHandler(FwOpcodeType opCode,
                                                          U32 commandSequence,
-                                                         SensorRange range,
-                                                         OutputDataRate outputDataRate,
-                                                         HighPassCorner highPassCorner) {
+                                                         const SensorRange& range,
+                                                         const OutputDataRate& outputDataRate,
+                                                         const HighPassCorner& highPassCorner) {
     const DeviceConfiguration configuration(range,
                                             outputDataRate,
                                             highPassCorner,
@@ -190,9 +190,9 @@ void SynchronizedApplication::REPORT_cmdHandler(FwOpcodeType opCode, U32 command
 
 void SynchronizedApplication::INITIALIZE_ALL_INTERNAL_cmdHandler(FwOpcodeType opCode,
                                                                   U32 commandSequence,
-                                                                  SensorRange range,
-                                                                  OutputDataRate outputDataRate,
-                                                                  HighPassCorner highPassCorner) {
+                                                                  const SensorRange& range,
+                                                                  const OutputDataRate& outputDataRate,
+                                                                  const HighPassCorner& highPassCorner) {
     const DeviceConfiguration configuration(range,
                                             outputDataRate,
                                             highPassCorner,

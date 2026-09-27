@@ -27,6 +27,8 @@ ManagerTester::ManagerTester()
       m_reentry(Reentry::NONE),
       m_reentrantStatus(DriverStatus::OK),
       m_reentrantPortStatus(),
+      m_driverStatus(Drv::SpiStatus::SPI_OK),
+      m_shortenReadBuffer(false),
       component("Manager") {
     this->initComponents();
     this->connectPorts();
@@ -54,9 +56,9 @@ void ManagerTester::testConfigureAndRead() {
     this->m_emulator.setRawSample(256000, -256000, 0);
     AccelerationSample sample;
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
-    EXPECT_EQ(256000, sample.getrawX());
-    EXPECT_EQ(-256000, sample.getrawY());
-    EXPECT_NEAR(9.80665, sample.getxMetersPerSecondSquared(), 0.0001);
+    EXPECT_EQ(256000, sample.get_rawX());
+    EXPECT_EQ(-256000, sample.get_rawY());
+    EXPECT_NEAR(9.80665, sample.get_xMetersPerSecondSquared(), 0.0001);
     ASSERT_TLM_RawX_SIZE(0);
     ASSERT_TLM_SamplesRead_SIZE(0);
 
@@ -233,7 +235,7 @@ void ManagerTester::testTemperatureAndMeasurementControlPorts() {
     this->m_emulator.setTemperature(1885U);
     TemperatureSample temperature;
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readTemperature(0, temperature));
-    EXPECT_NEAR(25.0, temperature.getcelsius(), 0.0001);
+    EXPECT_NEAR(25.0, temperature.get_celsius(), 0.0001);
     this->m_emulator.temperatureReads = {0x100U, 0x1FFU, 0x0FFU};
     EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readTemperature(0, temperature));
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_TEMPERATURE, DriverStatus::IMPLAUSIBLE_DATA);
@@ -256,7 +258,7 @@ void ManagerTester::testSnapshotDoesNotConsumeDataReady() {
 
     AccelerationSample sample;
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
-    EXPECT_EQ(7, sample.getrawX());
+    EXPECT_EQ(7, sample.get_rawX());
 }
 
 void ManagerTester::testNvmMismatchIsReported() {
@@ -301,11 +303,37 @@ void ManagerTester::testEveryControlPathReportsBusyWithoutBlocking() {
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
 }
 
-void ManagerTester::from_spi_handler(const NATIVE_INT_TYPE portNum,
-                                     Fw::Buffer& writeBuffer,
-                                     Fw::Buffer& readBuffer) {
+void ManagerTester::testDriverFailuresPropagateThroughTheSpiPort() {
+    // Initialization stops at the first failed transfer.
+    this->m_driverStatus = Drv::SpiStatus::SPI_OTHER_ERR;
+    EXPECT_EQ(DriverStatus::SPI_ERROR, this->invoke_to_configure(0, synchronizedPreset()));
+    ASSERT_EVENTS_OperationFailed(0, Operation::INITIALIZE, DriverStatus::SPI_ERROR);
+    ASSERT_EQ(1U, this->m_emulator.transactions.size());
+
+    this->m_driverStatus = Drv::SpiStatus::SPI_OK;
+    this->initialize();
+    this->m_emulator.setRawSample(1, 2, 3);
+    AccelerationSample sample;
+    this->m_driverStatus = Drv::SpiStatus::SPI_MISMATCH_ERR;
+    EXPECT_EQ(DriverStatus::SPI_ERROR, this->invoke_to_readAcceleration(0, sample));
+    ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::SPI_ERROR);
+
+    // A driver that reports success but changes a buffer is also a failure.
+    this->m_driverStatus = Drv::SpiStatus::SPI_OK;
+    this->m_shortenReadBuffer = true;
+    EXPECT_EQ(DriverStatus::SPI_ERROR, this->invoke_to_readAcceleration(0, sample));
+    this->m_shortenReadBuffer = false;
+    // That transfer reached the emulator and consumed DATA_RDY, so post a new sample.
+    this->m_emulator.setRawSample(1, 2, 3);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(1, sample.get_rawX());
+}
+
+Drv::SpiStatus ManagerTester::from_spi_handler(const FwIndexType portNum,
+                                               Fw::Buffer& writeBuffer,
+                                               Fw::Buffer& readBuffer) {
     (void)portNum;
-    ASSERT_EQ(writeBuffer.getSize(), readBuffer.getSize());
+    EXPECT_EQ(writeBuffer.getSize(), readBuffer.getSize());
     const Reentry reentry = this->m_reentry;
     this->m_reentry = Reentry::NONE;
     if (reentry == Reentry::READ_ACCELERATION) {
@@ -333,9 +361,17 @@ void ManagerTester::from_spi_handler(const NATIVE_INT_TYPE portNum,
         this->m_reentrantPortStatus[1] = this->invoke_to_readTemperature(0, temperature);
         this->m_reentrantPortStatus[2] = this->invoke_to_measurementControl(0, false);
     }
-    // Drv.SpiReadWrite has no status; like the flight driver, a failed
-    // emulator transfer is visible only through the returned bytes.
-    (void)this->m_emulator.transfer(writeBuffer.getData(), readBuffer.getData(), writeBuffer.getSize());
+    if (this->m_driverStatus != Drv::SpiStatus::SPI_OK) {
+        this->m_emulator.transactions.push_back(Adxl355Test::Transaction{
+            std::vector<std::uint8_t>(writeBuffer.getData(), writeBuffer.getData() + writeBuffer.getSize())});
+        return this->m_driverStatus;
+    }
+    const bool transferred =
+        this->m_emulator.transfer(writeBuffer.getData(), readBuffer.getData(), static_cast<std::size_t>(writeBuffer.getSize()));
+    if (this->m_shortenReadBuffer) {
+        readBuffer.setSize(readBuffer.getSize() - 1U);
+    }
+    return transferred ? Drv::SpiStatus::SPI_OK : Drv::SpiStatus::SPI_OTHER_ERR;
 }
 
 }  // namespace Adxl355

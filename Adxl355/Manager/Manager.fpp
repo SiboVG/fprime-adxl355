@@ -12,8 +12,8 @@ module Adxl355 {
     sync input port readTemperature: Adxl355.ReadTemperature
     sync input port measurementControl: Adxl355.MeasurementControl
 
-    @ Standard F Prime SPI abstraction; connect one instance per chip-select.
-    output port spi: Drv.SpiReadWrite
+    @ Standard status-returning F Prime SPI port; connect one driver instance per chip select.
+    output port spi: Drv.SpiWriteRead
 
     sync command INITIALIZE_SYNCED(
       range: Adxl355.SensorRange

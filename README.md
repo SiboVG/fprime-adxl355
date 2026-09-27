@@ -20,7 +20,7 @@ SynchronizedApplication
    | configure/read x 7
    v
 Manager[0..6]              device-specific F Prime layer
-   | Drv.SpiReadWrite x 7
+   | Drv.SpiWriteRead x 7
    v
 platform SPI driver[0..6]  device-agnostic hardware layer
    | shared bus, separate chip selects
@@ -38,7 +38,7 @@ The register-protocol core has no dependency on F Prime or a particular operatin
 | `Adxl355_Device` | Register protocol, configuration, conversions, FIFO, controls, and the non-blocking `AccessGate` |
 | `Adxl355_Platform` | F Prime OS delay adapter for the portable `Delay` interface |
 | `Adxl355_Array` | Framework-independent seven-device frame aggregator |
-| `Adxl355_Manager` | One device manager connected to a generic `Drv.SpiReadWrite` driver |
+| `Adxl355_Manager` | One device manager connected to a generic `Drv.SpiWriteRead` driver |
 | `Adxl355_Application` | Initializes and sequentially reads up to seven managers per FPGA sync instant |
 
 ## Quick start
@@ -52,7 +52,7 @@ The register-protocol core has no dependency on F Prime or a particular operatin
 
 For a one- or two-sensor Raspberry Pi 4 bench, use the internal-clock command `INITIALIZE_ALL_INTERNAL` and the wiring/topology example in [Raspberry Pi 4 bench example](docs/raspberry-pi-4.md). Internal mode verifies the complete SPI and F Prime stack but does not synchronize independent sensors.
 
-The CubeSpec LED tutorial is registered through `sandbox/tutorials/led-blinker/settings.ini`. The library has been built and unit-tested with that project's F Prime 3.5.1 toolchain.
+The library is built and tested against F Prime `35d4c0e` (v4.2.0-267), the revision fprime-csp-libparam and the TE0715 Zephyr workspace use.
 
 ## Automated assurance
 
@@ -60,10 +60,10 @@ The repository workflow at `.github/workflows/adxl355.yml` builds the portable
 host unit/integration tests, documentation contracts, the evidence-manifest
 check, and a strict MkDocs site. Independent jobs run address/undefined-behavior
 sanitizers, enforce line and branch coverage gates on the portable core, and run
-the generated F Prime component tests against F Prime v3.5.1 with a component
+the generated F Prime component tests against that F Prime revision with a component
 line-coverage gate. `clang-tidy` runs with warnings treated as errors on both the
 core and the component sources. Executed results are retained in `docs/evidence/`
-and pinned to the exact sources. The first remote workflow run to pass every job is
+and pinned to the exact sources. Before the move to F Prime `35d4c0e`, the first remote workflow run to pass every job was
 [run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404`.
 
 Pending hardware execution includes the physical Raspberry Pi/EVAL-ADXL355Z
