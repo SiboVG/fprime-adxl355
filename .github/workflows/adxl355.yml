@@ -126,9 +126,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+      # fprime/requirements.txt already pins gcovr (8.2); a second pin conflicts.
       - name: Install F Prime and analysis tooling
         run: >-
-          python -m pip install -r fprime/requirements.txt "gcovr==8.6" &&
+          python -m pip install -r fprime/requirements.txt &&
           sudo apt-get update && sudo apt-get install -y clang-tidy ninja-build
       - name: Generate the component consumer with coverage
         run: >-

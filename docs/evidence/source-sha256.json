@@ -1,6 +1,6 @@
 {
   ".clang-tidy": "0c48064c3acbf0905360f2a9fb6dbdecd145a10e07db8a21256bafe607143d4e",
-  ".github/workflows/adxl355.yml": "0b0cb70515f8be6e8067feb740c0f82f431d87ab243233c73314b95bb0f9a72b",
+  ".github/workflows/adxl355.yml": "ae9c4050ea37c91afdf2acf5dd4b28cbadd0f80bdb9eefaf2c98424b1f7f910c",
   "Adxl355/Application/CMakeLists.txt": "25ff4d65978281f8c614c3098c11f3d6b5d9017659434d5e81f024d8eafa52b3",
   "Adxl355/Application/SynchronizedApplication.cpp": "dbf6a3701aa6b063c2223ed4782a859ea00f8f8254e8027612e68d3818733c00",
   "Adxl355/Application/SynchronizedApplication.fpp": "161a46dfe44beb1d2aaa91d913ac38432ce8c98f819f04823770c129309f20b6",
