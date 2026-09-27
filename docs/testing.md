@@ -116,7 +116,7 @@ Coverage numbers belong in the evidence files and CI reports, not in prose. Cove
 
 The [requirements and verification matrix](requirements-and-verification.md) maps stable library requirement IDs to named host tests, generated F Prime tests, inspection evidence, and open HIL work. Update that page in the same change whenever behavior or tests change.
 
-The workflow also runs address/undefined-behavior sanitizers over the host tests. A remote workflow run has not yet been observed; the local results are the evidence of record until one is retained. Physical Raspberry Pi and flight-target HIL remain open until their identified as-run records have been captured and reviewed.
+The workflow also runs address/undefined-behavior sanitizers over the host tests. The first remote run to pass every job was [run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404` (2026-09-27). The first remote attempt, [run 36330821542](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36330821542), failed only while installing the component job's dependencies (a conflicting `gcovr` pin), which that commit fixed. CI logs expire, so `docs/evidence/` remains the retained record. Physical Raspberry Pi and flight-target HIL remain open until their identified as-run records have been captured and reviewed.
 
 ## Hardware-in-the-loop acceptance plan
 

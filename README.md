@@ -63,7 +63,8 @@ sanitizers, enforce line and branch coverage gates on the portable core, and run
 the generated F Prime component tests against F Prime v3.5.1 with a component
 line-coverage gate. `clang-tidy` runs with warnings treated as errors on both the
 core and the component sources. Executed results are retained in `docs/evidence/`
-and pinned to the exact sources; a remote workflow run has not yet been observed.
+and pinned to the exact sources. The first remote workflow run to pass every job is
+[run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404`.
 
 Pending hardware execution includes the physical Raspberry Pi/EVAL-ADXL355Z
 bring-up, external-clock and synchronization captures, seven-sensor
