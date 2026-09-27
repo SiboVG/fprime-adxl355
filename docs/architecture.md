@@ -11,7 +11,7 @@ The implementation deliberately separates mission behavior, device semantics, an
 | Driver | Seven generic SPI endpoints | Select the correct chip and perform a full-duplex byte transfer without knowing ADXL355 registers |
 | Hardware-independent core | `Adxl355::Device` | Encode registers, validate configuration, perform reset/readback, check freshness, decode samples, and convert units |
 
-This is the F Prime application-manager-driver pattern: the SPI driver remains reusable and device agnostic, while ADXL355 behavior stays above it. The standard `Drv.SpiReadWrite` port is the hardware boundary.
+This is the F Prime application-manager-driver pattern: the SPI driver remains reusable and device agnostic, while ADXL355 behavior stays above it. The standard status-returning `Drv.SpiWriteRead` port is the hardware boundary.
 
 ```mermaid
 flowchart TB
@@ -26,7 +26,7 @@ flowchart TB
     Timing -->|AcquireFrame<br/>timestamp| App
     App -->|Configure /<br/>ReadAcceleration| Manager
     Manager --> Core
-    Core -->|Drv.SpiReadWrite| Spi
+    Core -->|Drv.SpiWriteRead| Spi
     Spi -->|mode 0 SPI| Sensor
     App -->|SampleFrame| Consumer
 
@@ -72,7 +72,7 @@ One failed read therefore produces a partial frame instead of hiding the other s
 
 ### Freshness and plausibility
 
-The F Prime 3.5.1 `Drv.SpiReadWrite` port returns no status, so the library cannot learn from the transport that a transfer failed. It instead checks the bytes it receives, using properties the data sheet guarantees:
+The platform SPI driver reports transfer failures through `Drv.SpiWriteRead`, and the manager turns them into `SPI_ERROR`. A driver cannot see every fault, though: a floating or stuck MISO line, a missing chip select, or a sensor that is not converting still completes the transfer. The library therefore also checks the bytes it receives, using properties the data sheet guarantees:
 
 | Condition | Evidence in the burst | Status |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Controls that the data sheet requires to change in standby stop measurement, per
 - No dynamic allocation is used in the core or frame aggregation path.
 - Internal impossibilities use `ADXL355_ASSERT`, which the F Prime build maps to `FW_ASSERT` so the deployment's assertion hook defines the response. Examples are an unmapped status value, a sensor count outside 1 through 7 on the frame path, and an out-of-range stored range. Bus, ground, and configuration input is never asserted.
 
-The F Prime 3.5.1 `Drv.SpiReadWrite` port has no return status. A disconnected manager port is detected, protocol and readback failures are reported, and stale or implausible bus data is rejected as described above. An underlying Linux `ioctl` failure still cannot be returned through this standard port; the generic driver emits its own error event. A flight platform that requires per-transfer propagation should provide a status-bearing SPI adapter.
+The manager uses F Prime's status-returning `Drv.SpiWriteRead` port. A driver error, or a driver that reports success but changes a buffer's size or address, is reported as `SPI_ERROR` for that operation and handled like any other transport failure. The deprecated void `Drv.SpiReadWrite` port is not used; `Drv.LinuxSpiDriver` and fprime-zephyr's `ZephyrSpiDriver` both provide `SpiWriteRead`.
 
 ## Engineering-practice evidence
 

@@ -9,7 +9,7 @@ SynchronizedApplication
         v
 Manager (one per sensor)
         |
-        | Drv.SpiReadWrite
+        | Drv.SpiWriteRead
         v
 Drv.LinuxSpiDriver (one per chip select)
         |

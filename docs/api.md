@@ -41,7 +41,7 @@ Runtime controls are rejected with `INVALID_STATE` while the device is `UNCONFIG
 | `MeasurementControl` | Client to manager; start or stop measurement |
 | `AcquireFrame` | FPGA timing source to synchronized application; carries the sampling timestamp |
 | `FrameReady` | Synchronized application to downstream processing; carries a fixed-capacity frame |
-| `Drv.SpiReadWrite` | Manager to generic platform SPI driver |
+| `Drv.SpiWriteRead` | Manager to generic platform SPI driver; returns `Drv.SpiStatus`, and any failure becomes `SPI_ERROR` |
 
 ## `Adxl355.Manager` commands
 

@@ -19,8 +19,8 @@ module CubeSpecRpi {
     }
 
     connections Adxl355Spi {
-      adxl355Manager0.spi -> adxl355Spi0.SpiReadWrite
-      adxl355Manager1.spi -> adxl355Spi1.SpiReadWrite
+      adxl355Manager0.spi -> adxl355Spi0.SpiWriteRead
+      adxl355Manager1.spi -> adxl355Spi1.SpiWriteRead
     }
 
     # The containing deployment supplies these mission/platform connections:

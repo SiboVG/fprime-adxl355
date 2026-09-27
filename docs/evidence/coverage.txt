@@ -1,5 +1,5 @@
 # Coverage
-# Recorded 2026-09-27T15:38Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 3.5.1 (sandbox checkout); fpp 2.2.1 JVM wheels via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools linker ld-27037.1
+# Recorded 2026-09-27T16:35Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 ## Portable core (tests/, Apple Clang, llvm-cov gcov)
 100% tests passed, 0 tests failed out of 3
@@ -34,20 +34,20 @@ branches: 93.2% (399 out of 428)
 gate exit status: 0
 
 ## F Prime components (Adxl355/Manager, Application, Platform; --coverage build of the same consumer), CI gate --fail-under-line 85
-[  PASSED  ] 13 tests.
+[  PASSED  ] 14 tests.
 [  PASSED  ] 12 tests.
 File                                       Lines    Exec  Cover   Missing
 ------------------------------------------------------------------------------
 Adxl355/Application/SynchronizedApplication.cpp
                                              193     185    95%   50,91,177-178,233-234,237-238
-Adxl355/Manager/Manager.cpp                  320     303    94%   15,265-267,277-279,328,335,343,347,351,353,355,357,366-367
+Adxl355/Manager/Manager.cpp                  321     306    95%   15,266-268,278-280,336,348,352,354,356,358,367-368
 Adxl355/Platform/OsDelay.cpp                   5       5   100%
 ------------------------------------------------------------------------------
-TOTAL                                        518     493    95%
+TOTAL                                        519     496    95%
 ------------------------------------------------------------------------------
-lines: 95.2% (493 out of 518)
+lines: 95.6% (496 out of 519)
 functions: 100.0% (49 out of 49)
-branches: 57.4% (391 out of 681)
+branches: 53.1% (741 out of 1395)
 gate exit status: 0
 
 Branch percentages for generated-macro-heavy F Prime sources are reported in the CI artifact but not gated: LLVM counts implicit branches in telemetry and event macros.

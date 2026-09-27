@@ -31,8 +31,9 @@ Three executables run:
 
 ## F Prime tool chain
 
-Component tests and deployments need the Python tools pinned by the F Prime 3.5.1
-checkout, including fpp 2.2.1. In the CubeSpec workspace, create that environment with:
+Component tests and deployments need the Python tools pinned by the F Prime checkout at
+the tested revision, `35d4c0e881482adf372b8eee3eb56ad2dee74618` (v4.2.0-267), the same revision fprime-csp-libparam and the
+TE0715 Zephyr workspace use. In the CubeSpec workspace, create that environment with:
 
 ```sh
 tools/workspace/bootstrap-fprime-venv.sh --fprime /absolute/path/to/fprime --venv .venv-fprime
@@ -44,17 +45,18 @@ Outside the workspace, the equivalent is:
 ```sh
 python3 -m venv .venv-fprime && . .venv-fprime/bin/activate
 python -m pip install -r /absolute/path/to/fprime/requirements.txt
-# macOS only: fpp's macOS wheels contain x86_64 executables, so install the same
-# release's platform-independent (JVM) wheels instead. Requires Java 17 or newer.
-python -m pip download --no-deps --only-binary=:all: --platform any -d fpp-wheels \
-  $(grep -o '^fprime-fpp-[a-z-]*==[^ ;#]*' /absolute/path/to/fprime/requirements.txt)
-python -m pip install --force-reinstall --no-deps fpp-wheels/*.whl
+# macOS only: the pinned CMake 3.26.0 fails inside F Prime's build on macOS 27,
+# so remove it and use a newer host CMake (for example from Homebrew).
+python -m pip uninstall -y cmake
 ```
 
-Linux hosts use fpp's native wheels. The macOS JVM wheels run the same fpp release, so
-every host generates identical code. If a macOS link fails with `tapi error: malformed
-file`, the selected Xcode is older than the default SDK: update Xcode, or select the
-matching Command Line Tools with `sudo xcode-select -s /Library/Developer/CommandLineTools`.
+This revision pins fpp 3.3.0a12, which has native builds for Linux (x86_64 and aarch64)
+and macOS (arm64 and x86_64), so every host runs the same fpp release natively. The
+bootstrap script also handles older F Prime checkouts whose fpp has no native build for
+the host, by installing that release's platform-independent (JVM) wheels. If a macOS
+link fails with `tapi error: malformed file`, the selected Xcode is older than the
+default SDK: update Xcode, or select the matching Command Line Tools with
+`sudo xcode-select -s /Library/Developer/CommandLineTools`.
 
 ## F Prime component tests
 
@@ -69,13 +71,11 @@ cmake --build /tmp/adxl355-components \
 /tmp/adxl355-components/bin/$(uname)/Adxl355_Application_ut_exe
 ```
 
-The workspace sandbox also works when its `library_locations` points to `../../../libraries/fprime-adxl355`.
-
 The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges, stuck-bus and stale-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, and every other command and port must report `BUSY` after a bounded wait without changing device state.
 
 The application tests exercise seven-port fan-out, internal- and external-clock initialization, partial initialization, frame aggregation, disabled acquisition, the enabled-state reconfiguration interlock, throttled events from an intermittent sensor, deferred throttle clearing, overlapping triggers that must be skipped and leave a sequence gap, commands rejected while initialization owns the gate, and edge-detection restart.
 
-The workflow job `fprime-components` checks out F Prime v3.5.1, runs both executables with coverage instrumentation, and enforces a line-coverage gate on `Adxl355/Manager`, `Adxl355/Application`, and `Adxl355/Platform`.
+The workflow job `fprime-components` checks out F Prime at the tested revision, runs both executables with coverage instrumentation, and enforces a line-coverage gate on `Adxl355/Manager`, `Adxl355/Application`, and `Adxl355/Platform`.
 
 ## Static analysis
 
@@ -116,7 +116,7 @@ Coverage numbers belong in the evidence files and CI reports, not in prose. Cove
 
 The [requirements and verification matrix](requirements-and-verification.md) maps stable library requirement IDs to named host tests, generated F Prime tests, inspection evidence, and open HIL work. Update that page in the same change whenever behavior or tests change.
 
-The workflow also runs address/undefined-behavior sanitizers over the host tests. The first remote run to pass every job was [run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404` (2026-09-27). The first remote attempt, [run 36330821542](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36330821542), failed only while installing the component job's dependencies (a conflicting `gcovr` pin), which that commit fixed. CI logs expire, so `docs/evidence/` remains the retained record. Physical Raspberry Pi and flight-target HIL remain open until their identified as-run records have been captured and reviewed.
+The workflow also runs address/undefined-behavior sanitizers over the host tests. Before the move to F Prime `35d4c0e`, the first remote run to pass every job was [run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404` (2026-09-27). The first remote attempt, [run 36330821542](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36330821542), failed only while installing the component job's dependencies (a conflicting `gcovr` pin), which that commit fixed. CI logs expire, so `docs/evidence/` remains the retained record. Physical Raspberry Pi and flight-target HIL remain open until their identified as-run records have been captured and reviewed.
 
 ## Hardware-in-the-loop acceptance plan
 
@@ -133,11 +133,8 @@ Emulator tests do not prove electrical timing. Before flight use, run an HIL tes
 9. Exercise reset, reinitialization, and recovery without power cycling, and read the shadow registers after each reset.
 10. Run long enough to bound sequence gaps and `SkippedTriggers`.
 
+The TE0715 sensor bench (ZephyrOSTe0715 repository, `docs/tests/adxl355.md`) runs the manager and the synchronized application unchanged on a Zynq-7000 with Zephyr's SPI driver, against one ADXL355 on its internal clock, with a timing thread in place of the FPGA source. Its test cases cover steps 1, 2 (without the clock and synchronization signals), 6 (no external clock), 8 and 9 for one sensor, plus self test, temperature, six orientations and link faults. The external-synchronization, seven-sensor and flight-load steps stay open.
+
 For calibrated science use, add sensor-specific scale, bias, axis alignment, temperature, and cross-axis acceptance tests above this transport library.
 
 Passing host and component tests does not close this HIL plan. Archive signal captures, measured worst-case timing, exact software/hardware versions, command/event/telemetry logs, and fault-injection results with the CubeSpec release evidence.
-
-The workspace-level path correction is retained in
-[workspace-registration.patch](workspace-registration.patch), because the workspace
-and moved sandbox have no Git repository. It has already been applied locally;
-other workspace copies can apply it from `FlightSoftware` with `git apply`.

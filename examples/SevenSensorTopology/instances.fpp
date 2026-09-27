@@ -13,7 +13,7 @@ module CubeSpec {
   instance adxl355Manager6: Adxl355.Manager base id 0x4700
 
   # Linux bring-up example. A flight deployment may replace these with its
-  # Zynq/FPGA SPI driver while retaining the Drv.SpiReadWrite connections.
+  # Zynq/FPGA SPI driver while retaining the Drv.SpiWriteRead connections.
   instance adxl355Spi0: Drv.LinuxSpiDriver base id 0x5000
   instance adxl355Spi1: Drv.LinuxSpiDriver base id 0x5100
   instance adxl355Spi2: Drv.LinuxSpiDriver base id 0x5200

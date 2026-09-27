@@ -14,12 +14,13 @@ bool Manager::PortSpiBus::transfer(const std::uint8_t* transmit,
         !this->m_owner.isConnected_spi_OutputPort(0)) {
         return false;
     }
-    Fw::Buffer writeBuffer(const_cast<U8*>(reinterpret_cast<const U8*>(transmit)), static_cast<U32>(size));
-    Fw::Buffer readBuffer(reinterpret_cast<U8*>(receive), static_cast<U32>(size));
-    // Drv.SpiReadWrite in F Prime 3.5.1 returns no status; bus faults surface
-    // through the device core's status, identity, and readback checks.
-    this->m_owner.spi_out(0, writeBuffer, readBuffer);
-    return true;
+    Fw::Buffer writeBuffer(const_cast<U8*>(reinterpret_cast<const U8*>(transmit)), static_cast<FwSizeType>(size));
+    Fw::Buffer readBuffer(reinterpret_cast<U8*>(receive), static_cast<FwSizeType>(size));
+    // A transfer counts only if the driver reports success and leaves both
+    // buffers as they were handed over.
+    const Drv::SpiStatus status = this->m_owner.spi_out(0, writeBuffer, readBuffer);
+    return (status == Drv::SpiStatus::SPI_OK) && (writeBuffer.getSize() == size) && (readBuffer.getSize() == size) &&
+           (writeBuffer.getData() == transmit) && (readBuffer.getData() == receive);
 }
 
 Manager::Manager(const char* const componentName)
@@ -105,9 +106,9 @@ DriverStatus Manager::measurementControl_handler(FwIndexType portNum, bool enabl
 
 void Manager::INITIALIZE_SYNCED_cmdHandler(FwOpcodeType opCode,
                                            U32 commandSequence,
-                                           SensorRange rangeValue,
-                                           OutputDataRate outputDataRate,
-                                           HighPassCorner highPassCorner) {
+                                           const SensorRange& rangeValue,
+                                           const OutputDataRate& outputDataRate,
+                                           const HighPassCorner& highPassCorner) {
     if (!this->acquireForControl(Operation::INITIALIZE)) {
         this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
         return;
@@ -146,7 +147,7 @@ void Manager::STOP_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
     this->runControl(opCode, commandSequence, Operation::STOP, status);
 }
 
-void Manager::SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, SensorRange rangeValue) {
+void Manager::SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, const SensorRange& rangeValue) {
     if (!this->acquireForControl(Operation::SET_RANGE)) {
         this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
         return;
@@ -158,8 +159,8 @@ void Manager::SET_RANGE_cmdHandler(FwOpcodeType opCode, U32 commandSequence, Sen
 
 void Manager::SET_FILTER_cmdHandler(FwOpcodeType opCode,
                                     U32 commandSequence,
-                                    OutputDataRate outputDataRate,
-                                    HighPassCorner highPassCorner) {
+                                    const OutputDataRate& outputDataRate,
+                                    const HighPassCorner& highPassCorner) {
     if (!this->acquireForControl(Operation::SET_FILTER)) {
         this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
         return;
@@ -172,7 +173,7 @@ void Manager::SET_FILTER_cmdHandler(FwOpcodeType opCode,
 
 void Manager::SET_SYNC_cmdHandler(FwOpcodeType opCode,
                                   U32 commandSequence,
-                                  SynchronizationMode synchronizationMode,
+                                  const SynchronizationMode& synchronizationMode,
                                   bool externalClock) {
     if (!this->acquireForControl(Operation::SET_SYNCHRONIZATION)) {
         this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::EXECUTION_ERROR);
@@ -369,16 +370,16 @@ DriverStatus Manager::toFppStatus(Status status) {
 
 Configuration Manager::toCoreConfiguration(const DeviceConfiguration& configuration) {
     Configuration core;
-    core.range = static_cast<Range>(configuration.getrange());
-    core.outputDataRate = static_cast<OdrSetting>(configuration.getoutputDataRate());
-    core.highPassCorner = static_cast<HpfSetting>(configuration.gethighPassCorner());
-    core.syncMode = static_cast<SyncMode>(configuration.getsynchronizationMode());
-    core.externalClock = configuration.getexternalClock();
-    core.temperatureEnabled = configuration.gettemperatureEnabled();
-    core.dataReadyEnabled = configuration.getdataReadyEnabled();
-    core.interruptActiveHigh = configuration.getinterruptActiveHigh();
-    core.interruptMap = configuration.getinterruptMap();
-    core.fifoWatermark = configuration.getfifoWatermark();
+    core.range = static_cast<Range>(configuration.get_range());
+    core.outputDataRate = static_cast<OdrSetting>(configuration.get_outputDataRate());
+    core.highPassCorner = static_cast<HpfSetting>(configuration.get_highPassCorner());
+    core.syncMode = static_cast<SyncMode>(configuration.get_synchronizationMode());
+    core.externalClock = configuration.get_externalClock();
+    core.temperatureEnabled = configuration.get_temperatureEnabled();
+    core.dataReadyEnabled = configuration.get_dataReadyEnabled();
+    core.interruptActiveHigh = configuration.get_interruptActiveHigh();
+    core.interruptMap = configuration.get_interruptMap();
+    core.fifoWatermark = configuration.get_fifoWatermark();
     return core;
 }
 

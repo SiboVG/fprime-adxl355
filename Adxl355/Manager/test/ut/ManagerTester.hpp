@@ -9,8 +9,8 @@ namespace Adxl355 {
 
 class ManagerTester final : public ManagerGTestBase {
   public:
-    static const NATIVE_INT_TYPE MAX_HISTORY_SIZE = 200;
-    static const NATIVE_INT_TYPE TEST_INSTANCE_ID = 0;
+    static const U32 MAX_HISTORY_SIZE = 200;
+    static const FwEnumStoreType TEST_INSTANCE_ID = 0;
 
     ManagerTester();
     ~ManagerTester();
@@ -28,6 +28,7 @@ class ManagerTester final : public ManagerGTestBase {
     void testNvmMismatchIsReported();
     void testFailedSelfTestInvalidatesTheDevice();
     void testEveryControlPathReportsBusyWithoutBlocking();
+    void testDriverFailuresPropagateThroughTheSpiPort();
 
   private:
     enum class Reentry { NONE, READ_ACCELERATION, STOP_COMMAND, EVERY_CONTROL };
@@ -36,12 +37,14 @@ class ManagerTester final : public ManagerGTestBase {
     void initComponents();
     void initialize();
 
-    void from_spi_handler(const NATIVE_INT_TYPE portNum, Fw::Buffer& writeBuffer, Fw::Buffer& readBuffer);
+    Drv::SpiStatus from_spi_handler(const FwIndexType portNum, Fw::Buffer& writeBuffer, Fw::Buffer& readBuffer);
 
     Adxl355Test::RegisterSpi m_emulator;
     Reentry m_reentry;
     DriverStatus m_reentrantStatus;
     DriverStatus m_reentrantPortStatus[3];
+    Drv::SpiStatus m_driverStatus;
+    bool m_shortenReadBuffer;
     Manager component;
 };
 
