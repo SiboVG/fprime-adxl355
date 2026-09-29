@@ -25,7 +25,7 @@ ctest --test-dir /tmp/adxl355-host-tests --output-on-failure
 
 Three executables run:
 
-- `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, temperature conversion and tear rejection, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
+- `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, temperature conversion, tear rejection and plausibility, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
 - `adxl355-integration-tests` creates seven independent emulators and `Device` objects behind the portable `SynchronizedArray`. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, and fault containment for failed, stopped, and stale sensors.
 - `adxl355-gate-tests` verifies the `AccessGate` contract, including a two-thread test that no two owners ever overlap.
 

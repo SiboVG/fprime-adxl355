@@ -189,18 +189,58 @@ ADXL355_TEST(TemperatureRereadsAcrossAnUpdateAndRejectsUnstableValues) {
     Device device(spi, delay);
 
     Temperature temperature;
-    spi.temperatureReads = {0x0FFU, 0x100U, 0x100U};
+    spi.temperatureReads = {0x6FFU, 0x700U, 0x700U};
     EXPECT_EQ(Status::OK, device.readTemperature(temperature));
-    EXPECT_EQ(static_cast<std::uint16_t>(0x100), temperature.raw);
+    EXPECT_EQ(static_cast<std::uint16_t>(0x700), temperature.raw);
 
     const std::size_t before = spi.transactions.size();
-    spi.temperatureReads = {0x100U, 0x1FFU, 0x0FFU};
+    spi.temperatureReads = {0x700U, 0x7FFU, 0x6FFU};
     EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
-    EXPECT_EQ(static_cast<std::uint16_t>(0x100), temperature.raw);
+    EXPECT_EQ(static_cast<std::uint16_t>(0x700), temperature.raw);
     EXPECT_EQ(static_cast<std::size_t>(3), spi.transactions.size() - before);
 
     spi.failReadAddress = Adxl355::Registers::TEMP2;
     EXPECT_EQ(Status::SPI_ERROR, device.readTemperature(temperature));
+}
+
+ADXL355_TEST(TemperatureRejectsStuckMisoAndValuesOutsideTheStorageRange) {
+    RegisterSpi spi;
+    RecordingDelay delay;
+    Device device(spi, delay);
+    Temperature temperature;
+    spi.setTemperature(1885U);
+    EXPECT_EQ(Status::OK, device.readTemperature(temperature));
+
+    // All ones: TEMP2's reserved bits are set, rejected on the first read
+    // (two agreeing reads would otherwise give raw 4095, about -219 C).
+    spi.miso = RegisterSpi::Miso::STUCK_HIGH;
+    std::size_t before = spi.transactions.size();
+    EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
+    EXPECT_EQ(static_cast<std::size_t>(1), spi.transactions.size() - before);
+    // All zeros: raw 0, about +233 C.
+    spi.miso = RegisterSpi::Miso::STUCK_LOW;
+    EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
+    spi.miso = RegisterSpi::Miso::DRIVEN;
+
+    spi.registers[Adxl355::Registers::TEMP2] = 0x17U;
+    spi.registers[0x07] = 0x5CU;
+    before = spi.transactions.size();
+    EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
+    EXPECT_EQ(static_cast<std::size_t>(1), spi.transactions.size() - before);
+
+    // -55 C to +150 C are accepted (raw 2609 to 754).
+    spi.setTemperature(2600U);
+    EXPECT_EQ(Status::OK, device.readTemperature(temperature));
+    EXPECT_NEAR(-54.0, temperature.celsius, 0.01);
+    spi.setTemperature(760U);
+    EXPECT_EQ(Status::OK, device.readTemperature(temperature));
+    EXPECT_NEAR(149.31, temperature.celsius, 0.01);
+    spi.setTemperature(2610U);
+    EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
+    spi.setTemperature(750U);
+    EXPECT_EQ(Status::IMPLAUSIBLE_DATA, device.readTemperature(temperature));
+    // A rejected read leaves the previous result in place.
+    EXPECT_EQ(static_cast<std::uint16_t>(760), temperature.raw);
 }
 
 ADXL355_TEST(SynchronizedPresetProgramsBoardModeBeforeMeasurement) {

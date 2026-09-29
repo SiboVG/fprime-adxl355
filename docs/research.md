@@ -43,6 +43,7 @@ The no-OS header defines the `SYNC` register but does not expose a typed synchro
 - `DATA_RDY` clears on a STATUS read and sets only for newer data, and STATUS bits 7:5 always read 0; the acquisition path uses both to reject stale and implausible bus data.
 - A software reset can load NVM trim incorrectly on `REVID` <= 0x01; shadow registers 0x50 through 0x54 are compared before and after each reset, as the data sheet recommends.
 - Temperature is not double buffered, so it is read until two consecutive reads agree.
+- TEMP2 bits 7:4 are reserved and read 0 (0x07 at 25 °C on the TE0715 bench). A reading with them set, or outside the storage temperature range of −55 °C to +150 °C (Table 5), is not a temperature: a stuck-high MISO reads raw 4095 (about −219 °C), a stuck-low one raw 0 (about +233 °C).
 - `EXT_SYNC = 01` without `EXT_CLK` is rejected (Table 14, not recommended); a missing external clock in the flight mode yields null outputs, reported as `STALE_DATA`.
 - ST1 enables self-test mode and ST2 applies the force; ST2 without ST1 is rejected.
 - Only `HPF_CORNER`, `INT_MAP`, ST1/ST2, and reset may change in measurement mode; every other control enters standby first.

@@ -49,6 +49,8 @@ static const std::uint8_t STATUS_FIFO_OVERRUN = 0x04U;
 static const std::uint8_t STATUS_ACTIVITY = 0x08U;
 static const std::uint8_t STATUS_NVM_BUSY = 0x10U;
 static const std::uint8_t STATUS_RESERVED = 0xE0U;
+// TEMP2 bits 7:4 are reserved; bits 3:0 are temperature bits 11:8.
+static const std::uint8_t TEMP2_RESERVED = 0xF0U;
 
 static const std::uint8_t POWER_STANDBY = 0x01U;
 static const std::uint8_t POWER_TEMP_OFF = 0x02U;

@@ -1,5 +1,5 @@
 # Static analysis: clang-tidy (clang-analyzer-*, warnings as errors, .clang-tidy)
-# Recorded 2026-09-27T16:35Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-09-29T19:55Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 clang-tidy: Homebrew LLVM version 18.1.8
 Local macOS invocation adds --extra-arg=-nostdinc++ --extra-arg=-isystem<llvm@18>/include/c++/v1 --extra-arg=-isysroot --extra-arg=<MacOSX26.5.sdk>, because LLVM 18 cannot parse the macOS 27 SDK headers; the analyzed sources and compile flags are otherwise those of the default-SDK builds

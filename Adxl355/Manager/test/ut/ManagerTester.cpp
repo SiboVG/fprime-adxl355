@@ -185,10 +185,13 @@ void ManagerTester::testImplausibleBusDataIsRejected() {
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_configure(0, synchronizedPreset()));
     this->m_emulator.setRawSample(1, 1, 1);
     AccelerationSample sample;
+    TemperatureSample temperature;
     this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::STUCK_HIGH;
     EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readTemperature(0, temperature));
     this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::STUCK_LOW;
     EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readTemperature(0, temperature));
     this->m_emulator.miso = Adxl355Test::RegisterSpi::Miso::DRIVEN;
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
 }
@@ -236,7 +239,7 @@ void ManagerTester::testTemperatureAndMeasurementControlPorts() {
     TemperatureSample temperature;
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readTemperature(0, temperature));
     EXPECT_NEAR(25.0, temperature.get_celsius(), 0.0001);
-    this->m_emulator.temperatureReads = {0x100U, 0x1FFU, 0x0FFU};
+    this->m_emulator.temperatureReads = {0x700U, 0x7FFU, 0x6FFU};
     EXPECT_EQ(DriverStatus::IMPLAUSIBLE_DATA, this->invoke_to_readTemperature(0, temperature));
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_TEMPERATURE, DriverStatus::IMPLAUSIBLE_DATA);
 

@@ -13,7 +13,7 @@ Include `Adxl355/Device/Device.hpp`. Construct one `Device` per chip select with
 | `readSample` | Status-checked acquisition read: one STATUS..ZDATA1 burst; `STALE_DATA` when no newer sample exists, `IMPLAUSIBLE_DATA` for impossible status bytes; output written only on `OK` |
 | `readRawSample` | Diagnostic nine-byte X/Y/Z read without STATUS: no freshness check and no side effects |
 | `scale(raw, sample)` | Convert raw counts to SI units for the configured range |
-| `readTemperature` | Read the 12-bit temperature until two consecutive reads agree, then convert to degrees Celsius |
+| `readTemperature` | Read the 12-bit temperature until two consecutive reads agree, then convert to degrees Celsius; `IMPLAUSIBLE_DATA` when TEMP2's reserved bits are set or the value lies outside −55 °C to +150 °C |
 | `readFifo` | Read whole XYZ sets and validate FIFO entry count, axis markers, and empty markers |
 | `setRange` | Select +/-2 g, +/-4 g, or +/-8 g |
 | `setFilter` | Select ODR/low-pass and high-pass corner |

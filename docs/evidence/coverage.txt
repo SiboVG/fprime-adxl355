@@ -1,5 +1,5 @@
 # Coverage
-# Recorded 2026-09-27T16:35Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-09-29T19:55Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 ## Portable core (tests/, Apple Clang, llvm-cov gcov)
 100% tests passed, 0 tests failed out of 3
@@ -7,14 +7,14 @@ File                                       Lines    Exec  Cover   Missing
 ------------------------------------------------------------------------------
 Adxl355/Array/SynchronizedArray.cpp           54      54   100%
 Adxl355/Device/AccessGate.cpp                 25      25   100%
-Adxl355/Device/Device.cpp                    604     599    99%   658,678,720,833-834
+Adxl355/Device/Device.cpp                    609     604    99%   673,693,735,848-849
 Adxl355/Device/Registers.hpp                   4       4   100%
 ------------------------------------------------------------------------------
-TOTAL                                        687     682    99%
+TOTAL                                        692     687    99%
 ------------------------------------------------------------------------------
-lines: 99.3% (682 out of 687)
+lines: 99.3% (687 out of 692)
 functions: 100.0% (68 out of 68)
-branches: 90.1% (290 out of 322)
+branches: 90.2% (296 out of 328)
 
 ## Portable core with GCC 14 (the CI compiler family), CI gates --fail-under-line 95 --fail-under-branch 80
 Homebrew GCC 14.2 targets macOS 15 and cannot parse the macOS 27 SDK headers, so this cross-check alone compiles against the macOS 26.5 SDK.
@@ -23,14 +23,14 @@ File                                       Lines    Exec  Cover   Missing
 ------------------------------------------------------------------------------
 Adxl355/Array/SynchronizedArray.cpp           45      45   100%
 Adxl355/Device/AccessGate.cpp                 21      21   100%
-Adxl355/Device/Device.cpp                    536     532    99%   658,678,720,833
+Adxl355/Device/Device.cpp                    541     537    99%   673,693,735,848
 Adxl355/Device/Registers.hpp                   4       4   100%
 ------------------------------------------------------------------------------
-TOTAL                                        606     602    99%
+TOTAL                                        611     607    99%
 ------------------------------------------------------------------------------
-lines: 99.3% (602 out of 606)
+lines: 99.3% (607 out of 611)
 functions: 85.0% (68 out of 80)
-branches: 93.2% (399 out of 428)
+branches: 93.3% (405 out of 434)
 gate exit status: 0
 
 ## F Prime components (Adxl355/Manager, Application, Platform; --coverage build of the same consumer), CI gate --fail-under-line 85

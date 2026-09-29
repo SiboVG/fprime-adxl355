@@ -1,5 +1,5 @@
 # Host unit, integration, and gate tests
-# Recorded 2026-09-27T16:35Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-09-29T19:55Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 $ cmake -S tests -B build-host -G Ninja && cmake --build build-host
 (build completed with -Wall -Wextra -Werror; no warnings)
@@ -16,6 +16,7 @@ $ build-host/adxl355-unit-tests
 [PASS] ScaleTracksConfiguredRange
 [PASS] TemperatureUsesDatasheetInterceptAndSlope
 [PASS] TemperatureRereadsAcrossAnUpdateAndRejectsUnstableValues
+[PASS] TemperatureRejectsStuckMisoAndValuesOutsideTheStorageRange
 [PASS] SynchronizedPresetProgramsBoardModeBeforeMeasurement
 [PASS] ResetPollingHasABoundedNvmBusyTimeout
 [PASS] ShadowReferenceIsCapturedBeforeTheFirstSoftwareReset
@@ -56,7 +57,7 @@ $ build-host/adxl355-unit-tests
 [PASS] RegisterAccessRejectsInvalidTransfersWithoutIo
 [PASS] StatusRegisterFlagsAreDecoded
 [PASS] RawDiagnosticReadDoesNotConsumeDataReady
-51/51 tests passed
+52/52 tests passed
 exit status: 0
 
 $ build-host/adxl355-integration-tests

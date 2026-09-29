@@ -26,6 +26,7 @@ class RecordingDelay final : public Adxl355::Delay {
 //! Register-level ADXL355 emulator. Behavior follows data sheet Rev. D:
 //! writable bit masks from Tables 15-51, DATA_RDY/FIFO_OVR/activity cleared by
 //! a STATUS read, shadow trim registers 0x50-0x54 reloaded by a software reset.
+//! The die starts at the nominal 25 C (raw 1885), which a reset does not change.
 class RegisterSpi final : public Adxl355::SpiBus {
   public:
     enum class Miso { DRIVEN, STUCK_LOW, STUCK_HIGH };
@@ -46,6 +47,7 @@ class RegisterSpi final : public Adxl355::SpiBus {
           corruptShadowResets(0),
           resets(0) {
         powerOnDefaults();
+        setTemperature(1885U);
     }
 
     bool transfer(const std::uint8_t* transmit, std::uint8_t* receive, std::size_t size) override {
@@ -179,7 +181,11 @@ class RegisterSpi final : public Adxl355::SpiBus {
     }
 
     void powerOnDefaults() {
+        const std::uint8_t temperatureHigh = registers[0x06];
+        const std::uint8_t temperatureLow = registers[0x07];
         registers.fill(0U);
+        registers[0x06] = temperatureHigh;
+        registers[0x07] = temperatureLow;
         registers[0x00] = 0xAD;
         registers[0x01] = 0x1D;
         registers[0x02] = 0xED;

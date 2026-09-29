@@ -21,6 +21,11 @@ static const std::uint8_t FIFO_EMPTY_MARKER = 0x02U;
 static const std::uint8_t FIFO_X_AXIS_MARKER = 0x01U;
 static const std::size_t NVM_POLL_ATTEMPTS = 255U;
 static const std::size_t TEMPERATURE_READ_ATTEMPTS = 3U;
+// The storage temperature range (Rev. D, Table 5) is the widest the part is
+// rated for; the uncalibrated output can err by a few degrees, so the
+// operating range (-40 to +125 C) would reject real readings near its edges.
+static const double MIN_PLAUSIBLE_CELSIUS = -55.0;
+static const double MAX_PLAUSIBLE_CELSIUS = 150.0;
 // Transfers of at most this many data bytes use a small stack frame, so the
 // 4 kHz path does not clear FIFO-sized buffers on every read.
 static const std::size_t SMALL_TRANSFER = 16U;
@@ -634,11 +639,21 @@ Status Device::readTemperature(Temperature& temperature) {
         if (status != Status::OK) {
             return status;
         }
+        // Reserved bits read 0; set bits mean the bytes did not come from an
+        // ADXL355, for example a stuck-high MISO.
+        if ((bytes[0] & Registers::TEMP2_RESERVED) != 0U) {
+            return Status::IMPLAUSIBLE_DATA;
+        }
         const std::uint16_t current = static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(bytes[0] & 0x0FU) << 8U) | static_cast<std::uint16_t>(bytes[1]));
+            (static_cast<std::uint16_t>(bytes[0]) << 8U) | static_cast<std::uint16_t>(bytes[1]));
         if ((attempt > 0U) && (current == previous)) {
+            const double celsius = ((static_cast<double>(current) - 1885.0) / -9.05) + 25.0;
+            // A stuck-low MISO reads raw 0, about +233 C.
+            if ((celsius < MIN_PLAUSIBLE_CELSIUS) || (celsius > MAX_PLAUSIBLE_CELSIUS)) {
+                return Status::IMPLAUSIBLE_DATA;
+            }
             temperature.raw = current;
-            temperature.celsius = ((static_cast<double>(current) - 1885.0) / -9.05) + 25.0;
+            temperature.celsius = celsius;
             return Status::OK;
         }
         previous = current;

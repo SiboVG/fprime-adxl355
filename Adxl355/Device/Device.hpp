@@ -165,6 +165,7 @@ class Device {
     //! Diagnostic XYZ read without STATUS: no freshness check, no side effects.
     Status readRawSample(RawSample& sample);
     //! Reads the non-double-buffered pair until two consecutive reads agree.
+    //! Rejects set reserved bits and values outside -55 to +150 C.
     Status readTemperature(Temperature& temperature);
     Status readFifo(RawSample* samples, std::size_t capacity, std::size_t& count);
     void scale(const RawSample& raw, Sample& sample) const;
