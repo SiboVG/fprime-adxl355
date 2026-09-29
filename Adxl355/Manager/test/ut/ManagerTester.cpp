@@ -137,18 +137,31 @@ void ManagerTester::testHighRateFailuresAreEdgeReportedAndThrottled() {
     this->initialize();
     AccelerationSample sample;
 
-    // Repeated equal failures are counted but evented once.
+    // Repeated equal failures are counted but queued once. The read itself
+    // emits nothing; schedIn publishes the event, LastStatus and Errors.
     EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
     EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
+    ASSERT_TLM_LastStatus_SIZE(0);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_OperationFailed_SIZE(1);
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::STALE_DATA);
+    ASSERT_TLM_LastStatus(0, DriverStatus::STALE_DATA);
+    ASSERT_TLM_Errors(0, 2U);
+    // Without new edges, schedIn publishes nothing.
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_TLM_LastStatus_SIZE(1);
 
     // An intermittent sensor produces one edge per failure, bounded by the throttle.
     for (U32 cycle = 0U; cycle < 30U; ++cycle) {
         this->m_emulator.setRawSample(static_cast<I32>(cycle), 0, 0);
         EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
         EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+        if ((cycle % 4U) == 3U) {
+            this->invoke_to_schedIn(0, 0U);  // eight edges per call fit the queue
+        }
     }
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_OperationFailed_SIZE(10);
 
     this->sendCmd_CLEAR_EVENT_THROTTLE(0, 5U);
@@ -156,6 +169,7 @@ void ManagerTester::testHighRateFailuresAreEdgeReportedAndThrottled() {
     this->m_emulator.setRawSample(1, 0, 0);
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
     EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_OperationFailed_SIZE(11);
 
     this->m_emulator.setRawSample(2, 0, 0);
@@ -167,6 +181,7 @@ void ManagerTester::testReadBeforeInitializationIsRejected() {
     AccelerationSample sample;
     ASSERT_EQ(DriverStatus::INVALID_STATE, this->invoke_to_readAcceleration(0, sample));
     ASSERT_TRUE(this->m_emulator.transactions.empty());
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_OperationFailed_SIZE(1);
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::INVALID_STATE);
 
@@ -319,6 +334,7 @@ void ManagerTester::testDriverFailuresPropagateThroughTheSpiPort() {
     AccelerationSample sample;
     this->m_driverStatus = Drv::SpiStatus::SPI_MISMATCH_ERR;
     EXPECT_EQ(DriverStatus::SPI_ERROR, this->invoke_to_readAcceleration(0, sample));
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::SPI_ERROR);
 
     // A driver that reports success but changes a buffer is also a failure.
@@ -332,6 +348,51 @@ void ManagerTester::testDriverFailuresPropagateThroughTheSpiPort() {
     EXPECT_EQ(1, sample.get_rawX());
 }
 
+void ManagerTester::testHighRateEdgesBeyondTheQueueAreDropped() {
+    this->initialize();
+    AccelerationSample sample;
+    // Twelve fresh-then-stale pairs without schedIn are 23 edges (the first
+    // fresh read is no edge); the queue keeps the first sixteen, eight of them
+    // failures, below the throttle of ten.
+    for (U32 cycle = 0U; cycle < 12U; ++cycle) {
+        this->m_emulator.setRawSample(static_cast<I32>(cycle), 0, 0);
+        EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+        EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    }
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_OperationFailed_SIZE(8);
+    // LastStatus is the current status and Errors counts every failure, also
+    // those whose edges were dropped.
+    ASSERT_TLM_LastStatus_SIZE(1);
+    ASSERT_TLM_LastStatus(0, DriverStatus::STALE_DATA);
+    ASSERT_TLM_Errors(0, 12U);
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_OperationFailed_SIZE(8);
+    ASSERT_TLM_LastStatus_SIZE(1);
+
+    // A recovery alone is published as well.
+    this->m_emulator.setRawSample(99, 0, 0);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_OperationFailed_SIZE(8);
+    ASSERT_TLM_LastStatus(1, DriverStatus::OK);
+}
+
+void ManagerTester::testSchedInNeverWaitsForTheGate() {
+    this->initialize();
+    AccelerationSample sample;
+    EXPECT_EQ(DriverStatus::STALE_DATA, this->invoke_to_readAcceleration(0, sample));
+    // READ_SNAPSHOT owns the gate during its SPI transfers; schedIn called then
+    // publishes at once instead of waiting or reporting busy.
+    this->m_reentry = Reentry::SCHED_IN;
+    this->m_emulator.setRawSample(1, 2, 3);
+    this->sendCmd_READ_SNAPSHOT(0, 1U);
+    ASSERT_CMD_RESPONSE(0, Manager::OPCODE_READ_SNAPSHOT, 1U, Fw::CmdResponse::OK);
+    ASSERT_EVENTS_OperationFailed_SIZE(1);
+    ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::STALE_DATA);
+    ASSERT_EVENTS_ControlBusy_SIZE(0);
+}
+
 Drv::SpiStatus ManagerTester::from_spi_handler(const FwIndexType portNum,
                                                Fw::Buffer& writeBuffer,
                                                Fw::Buffer& readBuffer) {
@@ -342,6 +403,8 @@ Drv::SpiStatus ManagerTester::from_spi_handler(const FwIndexType portNum,
     if (reentry == Reentry::READ_ACCELERATION) {
         AccelerationSample sample;
         this->m_reentrantStatus = this->invoke_to_readAcceleration(0, sample);
+    } else if (reentry == Reentry::SCHED_IN) {
+        this->invoke_to_schedIn(0, 0U);
     } else if (reentry == Reentry::STOP_COMMAND) {
         this->sendCmd_STOP(0, 9U);
     } else if (reentry == Reentry::EVERY_CONTROL) {

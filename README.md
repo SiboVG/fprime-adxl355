@@ -46,7 +46,7 @@ The register-protocol core has no dependency on F Prime or a particular operatin
 1. Add this directory to the F Prime project's `library_locations` and let its `library.cmake` register the modules.
 2. Instantiate one `Adxl355.Manager` and one generic SPI driver per chip select, plus one `Adxl355.SynchronizedApplication`.
 3. Open each SPI endpoint in mode 0 at 5 or 10 MHz.
-4. Connect the FPGA sample-ready/timestamp output to `acquireFrame`.
+4. Connect the FPGA sample-ready/timestamp output to `acquireFrame`, and a rate group below it to `schedIn` of the application and of every manager (fault events).
 5. Send `INITIALIZE_ALL(G2, HZ_4000, OFF)` to the application, confirm an initialized mask of `0x7F`, and then enable the synchronization pulses.
 6. Consume `SampleFrame` from `frameReady`; `validMask` and `sensorStatus` identify partial frames without discarding healthy sensors.
 

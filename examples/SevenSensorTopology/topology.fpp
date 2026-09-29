@@ -51,9 +51,13 @@ module CubeSpec {
     }
 
     # Add these connections in the containing deployment, using its concrete
-    # FPGA timing source and frame consumer:
+    # FPGA timing source, frame consumer and a rate group below the timing task
+    # (it publishes the fault edges the acquisition path queues):
     # fpgaSync.sampleReady -> adxl355App.acquireFrame
     # adxl355App.frameReady -> accelerationPipeline.frameIn
+    # rateGroup.RateGroupMemberOut[n] -> adxl355App.schedIn
+    # rateGroup.RateGroupMemberOut[n + 1] -> adxl355Manager0.schedIn
+    # ... through adxl355Manager6.schedIn
 
   }
 

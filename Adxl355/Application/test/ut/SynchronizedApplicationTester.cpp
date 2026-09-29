@@ -129,14 +129,20 @@ void SynchronizedApplicationTester::testPartialFrameIsEdgeReportedAndRecovers() 
     this->invoke_to_acquireFrame(0, 10U);
     ASSERT_EQ(0x7BU, this->m_lastFrame.get_validMask());
     ASSERT_EQ(DriverStatus::SPI_ERROR, this->m_lastFrame.get_sensorStatus()[2]);
+    // The frame itself emits nothing; schedIn publishes the edge.
+    ASSERT_EVENTS_FrameIncomplete_SIZE(0);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameIncomplete_SIZE(1);
     ASSERT_EVENTS_FrameIncomplete(0, 0U, 0x7BU);
 
     this->invoke_to_acquireFrame(0, 20U);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameIncomplete_SIZE(1);
 
     this->m_sensorStatus[2] = DriverStatus::OK;
     this->invoke_to_acquireFrame(0, 30U);
+    ASSERT_EVENTS_FrameRecovered_SIZE(0);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameRecovered_SIZE(1);
     ASSERT_EVENTS_FrameRecovered(0, 2U);
 
@@ -188,19 +194,23 @@ void SynchronizedApplicationTester::testIntermittentSensorEventsAreThrottled() {
     for (U32 frame = 0U; frame < 50U; ++frame) {
         this->m_sensorStatus[2] = ((frame % 2U) == 0U) ? DriverStatus::SPI_ERROR : DriverStatus::OK;
         this->invoke_to_acquireFrame(0, frame);
+        if ((frame % 10U) == 9U) {
+            this->invoke_to_schedIn(0, 0U);  // ten edges per call fit the queue
+        }
     }
     ASSERT_EQ(50U, this->m_frameCalls);
     ASSERT_EVENTS_FrameIncomplete_SIZE(10);
     ASSERT_EVENTS_FrameRecovered_SIZE(10);
 
-    // While enabled the clear is deferred to the next frame, so the command
-    // cannot cost a frame; afterwards the events flow again.
+    // The clear takes effect at once, also while acquisition runs, and needs
+    // no gate; afterwards the events flow again.
     this->sendCmd_CLEAR_EVENT_THROTTLE(0, 2U);
     ASSERT_CMD_RESPONSE(1, SynchronizedApplication::OPCODE_CLEAR_EVENT_THROTTLE, 2U, Fw::CmdResponse::OK);
     this->m_sensorStatus[2] = DriverStatus::SPI_ERROR;
     this->invoke_to_acquireFrame(0, 100U);
     this->m_sensorStatus[2] = DriverStatus::OK;
     this->invoke_to_acquireFrame(0, 101U);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameIncomplete_SIZE(11);
     ASSERT_EVENTS_FrameRecovered_SIZE(11);
 
@@ -248,13 +258,51 @@ void SynchronizedApplicationTester::testEnablingRestartsEdgeDetection() {
     this->sendCmd_SET_ENABLED(0, 1U, true);
     this->m_sensorStatus[0] = DriverStatus::STALE_DATA;
     this->invoke_to_acquireFrame(0, 1U);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameIncomplete_SIZE(1);
     this->sendCmd_SET_ENABLED(0, 2U, false);
     this->sendCmd_SET_ENABLED(0, 3U, true);
     this->sendCmd_SET_ENABLED(0, 4U, true);
     this->invoke_to_acquireFrame(0, 2U);
+    this->invoke_to_schedIn(0, 0U);
     ASSERT_EVENTS_FrameIncomplete_SIZE(2);
     ASSERT_CMD_RESPONSE(3, SynchronizedApplication::OPCODE_SET_ENABLED, 4U, Fw::CmdResponse::OK);
+}
+
+void SynchronizedApplicationTester::testFrameEdgesBeyondTheQueueAreDropped() {
+    this->sendCmd_SET_ENABLED(0, 1U, true);
+    // Twenty alternating frames without schedIn are twenty edges; the queue
+    // keeps the first sixteen, eight of each kind, below the throttle of ten.
+    for (U32 frame = 0U; frame < 20U; ++frame) {
+        this->m_sensorStatus[4] = ((frame % 2U) == 0U) ? DriverStatus::STALE_DATA : DriverStatus::OK;
+        this->invoke_to_acquireFrame(0, frame);
+    }
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_FrameIncomplete_SIZE(8);
+    ASSERT_EVENTS_FrameRecovered_SIZE(8);
+    ASSERT_EVENTS_FrameIncomplete(0, 0U, 0x6FU);
+    ASSERT_EVENTS_FrameRecovered(7, 15U);
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_FrameIncomplete_SIZE(8);
+
+    // Every partial frame is still counted.
+    this->sendCmd_REPORT(0, 2U);
+    ASSERT_TLM_PartialFrames(0, 10U);
+    ASSERT_TLM_Frames(0, 20U);
+}
+
+void SynchronizedApplicationTester::testSchedInPublishesWhileAFrameOwnsTheGate() {
+    this->sendCmd_SET_ENABLED(0, 1U, true);
+    this->m_sensorStatus[1] = DriverStatus::SPI_ERROR;
+    this->invoke_to_acquireFrame(0, 1U);
+    // The next frame calls schedIn from its first sensor read, while it owns
+    // the gate: the queued edge is published and the frame completes.
+    this->m_reentry = Reentry::SCHED_IN;
+    this->invoke_to_acquireFrame(0, 2U);
+    ASSERT_EVENTS_FrameIncomplete_SIZE(1);
+    ASSERT_EVENTS_FrameIncomplete(0, 0U, 0x7DU);
+    ASSERT_EVENTS_ApplicationBusy_SIZE(0);
+    ASSERT_EQ(2U, this->m_frameCalls);
 }
 
 DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const FwIndexType portNum,
@@ -262,6 +310,9 @@ DriverStatus SynchronizedApplicationTester::from_readSensor_handler(const FwInde
     if (this->m_reentry == Reentry::TRIGGER) {
         this->m_reentry = Reentry::NONE;
         this->invoke_to_acquireFrame(0, 11U);
+    } else if (this->m_reentry == Reentry::SCHED_IN) {
+        this->m_reentry = Reentry::NONE;
+        this->invoke_to_schedIn(0, 0U);
     }
     ++this->m_sensorCalls[portNum];
     sample.set(static_cast<I32>(portNum + 1),

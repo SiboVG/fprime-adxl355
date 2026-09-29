@@ -27,9 +27,11 @@ class SynchronizedApplicationTester final : public SynchronizedApplicationGTestB
     void testOverlappingTriggerIsSkippedCountedAndLeavesASequenceGap();
     void testCommandsDuringInitializationReportBusy();
     void testEnablingRestartsEdgeDetection();
+    void testFrameEdgesBeyondTheQueueAreDropped();
+    void testSchedInPublishesWhileAFrameOwnsTheGate();
 
   private:
-    enum class Reentry { NONE, TRIGGER, ENABLE_AND_COUNT };
+    enum class Reentry { NONE, TRIGGER, ENABLE_AND_COUNT, SCHED_IN };
 
     void connectPorts();
     void initComponents();

@@ -7,6 +7,7 @@ set(MOD_DEPS
     Adxl355_Device
     Adxl355_Platform
     Adxl355_Types
+    Svc_Sched
 )
 
 register_fprime_module()

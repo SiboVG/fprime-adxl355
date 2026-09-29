@@ -16,5 +16,6 @@ They are integration fragments, not a standalone deployment. The enclosing topol
 3. Apply command, event, telemetry, text-event, and time connection patterns to the application and managers; apply driver event, telemetry, text-event, and time patterns as required by the F Prime version.
 4. For a polling smoke test, use `INITIALIZE_ALL_INTERNAL` and manager `READ_SNAPSHOT` commands.
 5. For synchronized acquisition, connect the real timing source to `adxl355App.acquireFrame` and a consumer to `adxl355App.frameReady`.
+6. Connect `schedIn` of `adxl355App` and of both managers to a rate group below the timing source; it publishes their fault events.
 
 The complete wiring and command procedures are in the MkDocs page `docs/raspberry-pi-4.md`.

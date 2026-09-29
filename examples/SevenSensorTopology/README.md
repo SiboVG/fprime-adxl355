@@ -8,7 +8,8 @@
 2. Merge the three connection groups into the deployment topology.
 3. Apply the normal command/event/telemetry/time connection patterns to `adxl355App` and all seven managers. Apply driver event/telemetry/time connections as required by the chosen platform driver.
 4. Connect the FPGA sample-ready output to `adxl355App.acquireFrame` and connect `frameReady` to the mission data path.
-5. Open each SPI endpoint before `INITIALIZE_ALL`.
+5. Connect `schedIn` of `adxl355App` and of all seven managers to one rate group that runs below the FPGA timing task; it publishes their fault events.
+6. Open each SPI endpoint before `INITIALIZE_ALL`.
 
 For Linux bench bring-up, the equivalent initialization is:
 

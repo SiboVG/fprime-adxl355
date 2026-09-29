@@ -1,5 +1,5 @@
 # Host unit, integration, and gate tests
-# Recorded 2026-09-29T19:55Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-09-29T21:33Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 $ cmake -S tests -B build-host -G Ninja && cmake --build build-host
 (build completed with -Wall -Wextra -Werror; no warnings)
@@ -76,5 +76,8 @@ $ build-host/adxl355-gate-tests
 [PASS] ControlAcquireRetriesWithABoundedDelay
 [PASS] GateHoldReleasesOnlyWhatItAcquired
 [PASS] ConcurrentOwnersNeverOverlap
-4/4 tests passed
+[PASS] ReportQueueKeepsOrderAndDropsWhenFull
+[PASS] ReportQueueWrapsAroundItsStorage
+[PASS] ReportQueueHandsEveryRecordAcrossThreadsInOrder
+7/7 tests passed
 exit status: 0

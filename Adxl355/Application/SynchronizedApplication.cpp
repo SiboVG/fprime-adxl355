@@ -24,14 +24,14 @@ SynchronizedApplication::SynchronizedApplication(const char* const componentName
       m_delay(),
       m_gate(),
       m_enabled(false),
-      m_throttleClearRequested(false),
       m_sensorCount(MAX_SENSORS),
       m_initializedMask(0U),
       m_lastValidMask(expectedMask(MAX_SENSORS)),
       m_sequence(0U),
       m_frames(0U),
       m_partialFrames(0U),
-      m_skippedTriggers(0U) {}
+      m_skippedTriggers(0U),
+      m_frameReports() {}
 
 SynchronizedApplication::~SynchronizedApplication() {}
 
@@ -90,9 +90,6 @@ void SynchronizedApplication::acquireFrame_handler(FwIndexType portNum, const U6
     if (!this->m_enabled.load()) {
         return;  // disabled while this trigger was starting
     }
-    if (this->m_throttleClearRequested.exchange(false)) {
-        this->clearEventThrottles();
-    }
 
     const U8 sensorCount = this->m_sensorCount.load();
     FW_ASSERT((sensorCount >= 1U) && (sensorCount <= MAX_SENSORS), sensorCount);
@@ -114,13 +111,15 @@ void SynchronizedApplication::acquireFrame_handler(FwIndexType portNum, const U6
     const U8 completeMask = expectedMask(sensorCount);
     const U8 lastValidMask = this->m_lastValidMask.load();
     const bool partial = validMask != completeMask;
+    // Edges only, and queued for schedIn: an event costs this path several
+    // sensor reads.
     if (partial) {
         this->m_partialFrames.fetch_add(1U);
         if (validMask != lastValidMask) {
-            this->log_WARNING_HI_FrameIncomplete(sequence, validMask);
+            (void)this->m_frameReports.push(FrameReport{sequence, validMask, false});
         }
     } else if (lastValidMask != completeMask) {
-        this->log_ACTIVITY_HI_FrameRecovered(sequence);
+        (void)this->m_frameReports.push(FrameReport{sequence, validMask, true});
     }
 
     this->m_lastValidMask.store(validMask);
@@ -130,6 +129,22 @@ void SynchronizedApplication::acquireFrame_handler(FwIndexType portNum, const U6
     if (this->isConnected_frameReady_OutputPort(0)) {
         this->frameReady_out(0, frame);
     }
+}
+
+void SynchronizedApplication::schedIn_handler(FwIndexType portNum, U32 context) {
+    (void)portNum;
+    (void)context;
+    // No gate: the queue is lock-free and F Prime keeps event throttle counters
+    // in atomics. At most one queue's worth of edges per call.
+    FrameReport report = {0U, 0U, false};
+    for (std::size_t edge = 0U; (edge < FRAME_REPORT_CAPACITY) && this->m_frameReports.pop(report); ++edge) {
+        if (report.recovered) {
+            this->log_ACTIVITY_HI_FrameRecovered(report.sequence);
+        } else {
+            this->log_WARNING_HI_FrameIncomplete(report.sequence, report.validMask);
+        }
+    }
+    (void)this->m_frameReports.takeDropped();
 }
 
 void SynchronizedApplication::SET_SENSOR_COUNT_cmdHandler(FwOpcodeType opCode,
@@ -164,7 +179,6 @@ void SynchronizedApplication::SET_ENABLED_cmdHandler(FwOpcodeType opCode,
             }
             // Restart edge detection and event throttles for the new episode.
             this->m_lastValidMask.store(expectedMask(this->m_sensorCount.load()));
-            this->m_throttleClearRequested.store(false);
             this->clearEventThrottles();
             this->m_enabled.store(true);
         }
@@ -207,15 +221,9 @@ void SynchronizedApplication::INITIALIZE_ALL_INTERNAL_cmdHandler(FwOpcodeType op
 }
 
 void SynchronizedApplication::CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) {
-    // The throttle counters belong to the gate owner. While acquisition runs,
-    // the next frame applies the request, so this command never costs a frame.
-    this->m_throttleClearRequested.store(true);
-    if (!this->m_enabled.load()) {
-        GateHold hold(this->m_gate, this->m_gate.acquire(this->m_delay, CONTROL_ACQUIRE_ATTEMPTS));
-        if (hold.held() && this->m_throttleClearRequested.exchange(false)) {
-            this->clearEventThrottles();
-        }
-    }
+    // The frame events are emitted by schedIn and their throttle counters are
+    // atomic, so no gate is needed and the command never costs a frame.
+    this->clearEventThrottles();
     this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::OK);
 }
 

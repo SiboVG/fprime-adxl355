@@ -9,6 +9,7 @@ set(MOD_DEPS
     Adxl355_Types
     Drv_Ports
     Os
+    Svc_Sched
 )
 
 register_fprime_module()

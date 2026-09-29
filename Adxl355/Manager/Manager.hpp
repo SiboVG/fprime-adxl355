@@ -3,8 +3,11 @@
 
 #include "Adxl355/Device/AccessGate.hpp"
 #include "Adxl355/Device/Device.hpp"
+#include "Adxl355/Device/ReportQueue.hpp"
 #include "Adxl355/Manager/ManagerComponentAc.hpp"
 #include "Adxl355/Platform/OsDelay.hpp"
+
+#include <atomic>
 
 namespace Adxl355 {
 
@@ -13,6 +16,10 @@ class Manager final : public ManagerComponentBase {
     //! Attempts (1 ms apart) a control handler makes to take the gate. The
     //! high-rate reader holds it for one SPI transfer, so one retry suffices.
     static const U32 CONTROL_ACQUIRE_ATTEMPTS = 10U;
+    //! readAcceleration status edges held for schedIn. Beyond this many edges
+    //! between two schedIn calls the rest are dropped; Errors still counts every
+    //! failure and LastStatus still shows the current status.
+    static const std::size_t HIGH_RATE_REPORT_CAPACITY = 16U;
 
     explicit Manager(const char* const componentName);
     ~Manager();
@@ -31,6 +38,7 @@ class Manager final : public ManagerComponentBase {
     DriverStatus readAcceleration_handler(FwIndexType portNum, AccelerationSample& sample) override;
     DriverStatus readTemperature_handler(FwIndexType portNum, TemperatureSample& sample) override;
     DriverStatus measurementControl_handler(FwIndexType portNum, bool enable) override;
+    void schedIn_handler(FwIndexType portNum, U32 context) override;
 
     void INITIALIZE_SYNCED_cmdHandler(FwOpcodeType opCode,
                                       U32 commandSequence,
@@ -77,7 +85,7 @@ class Manager final : public ManagerComponentBase {
     static Configuration toCoreConfiguration(const DeviceConfiguration& configuration);
     static bool isOperatorError(Status status);
     void recordStatus(Operation operation, Status status);
-    void recordHighRateStatus(Operation operation, Status status);
+    void recordHighRateStatus(Status status);
     void respond(FwOpcodeType opCode, U32 commandSequence, Status status);
     void publishLifecycle();
     void emitSampleTelemetry(const Sample& sample);
@@ -87,8 +95,12 @@ class Manager final : public ManagerComponentBase {
     Device m_device;
     AccessGate m_gate;
     U64 m_samplesRead;
-    U64 m_errors;
+    //! Read by schedIn without the gate; written only by the gate owner.
+    std::atomic<U64> m_errors;
     Status m_lastHighRateStatus;
+    //! m_lastHighRateStatus for schedIn, which does not take the gate.
+    std::atomic<Status> m_publishedHighRateStatus;
+    ReportQueue<Status, HIGH_RATE_REPORT_CAPACITY> m_highRateReports;
 };
 
 }  // namespace Adxl355

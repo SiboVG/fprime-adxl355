@@ -70,6 +70,16 @@ TEST(OffNominal, DriverFailuresPropagateThroughTheSpiPort) {
     tester.testDriverFailuresPropagateThroughTheSpiPort();
 }
 
+TEST(OffNominal, HighRateEdgesBeyondTheQueueAreDropped) {
+    Adxl355::ManagerTester tester;
+    tester.testHighRateEdgesBeyondTheQueueAreDropped();
+}
+
+TEST(Concurrency, SchedInNeverWaitsForTheGate) {
+    Adxl355::ManagerTester tester;
+    tester.testSchedInNeverWaitsForTheGate();
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

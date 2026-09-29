@@ -5,6 +5,11 @@
 
 namespace Adxl355 {
 
+// schedIn reads these without the gate; a hidden lock would block the 4 kHz path.
+static_assert(ATOMIC_CHAR_LOCK_FREE == 2, "the published status requires a lock-free atomic");
+static_assert((ATOMIC_LLONG_LOCK_FREE == 2) && (ATOMIC_LONG_LOCK_FREE == 2),
+              "the error counter requires lock-free 64-bit atomics");
+
 Manager::PortSpiBus::PortSpiBus(Manager& owner) : m_owner(owner) {}
 
 bool Manager::PortSpiBus::transfer(const std::uint8_t* transmit,
@@ -31,7 +36,9 @@ Manager::Manager(const char* const componentName)
       m_gate(),
       m_samplesRead(0U),
       m_errors(0U),
-      m_lastHighRateStatus(Status::OK) {}
+      m_lastHighRateStatus(Status::OK),
+      m_publishedHighRateStatus(Status::OK),
+      m_highRateReports() {}
 
 Manager::~Manager() {}
 
@@ -54,7 +61,7 @@ DriverStatus Manager::readAcceleration_handler(FwIndexType portNum, Acceleration
         return DriverStatus::BUSY;
     }
     if (!this->m_device.isMeasuring()) {
-        this->recordHighRateStatus(Operation::READ_SAMPLE, Status::INVALID_STATE);
+        this->recordHighRateStatus(Status::INVALID_STATE);
         return DriverStatus::INVALID_STATE;
     }
     Sample coreSample;
@@ -68,7 +75,7 @@ DriverStatus Manager::readAcceleration_handler(FwIndexType portNum, Acceleration
                    coreSample.zMetersPerSecondSquared);
         ++this->m_samplesRead;
     }
-    this->recordHighRateStatus(Operation::READ_SAMPLE, status);
+    this->recordHighRateStatus(status);
     return Manager::toFppStatus(status);
 }
 
@@ -86,6 +93,26 @@ DriverStatus Manager::readTemperature_handler(FwIndexType portNum, TemperatureSa
         this->recordStatus(Operation::READ_TEMPERATURE, status);
     }
     return Manager::toFppStatus(status);
+}
+
+void Manager::schedIn_handler(FwIndexType portNum, U32 context) {
+    (void)portNum;
+    (void)context;
+    // No gate: the queue and counters are lock-free, and F Prime keeps event
+    // throttle counters in atomics, so publishing never costs the 4 kHz path a
+    // sample. At most one queue's worth of edges per call.
+    bool changed = this->m_highRateReports.takeDropped() > 0U;
+    Status status = Status::OK;
+    for (std::size_t edge = 0U; (edge < HIGH_RATE_REPORT_CAPACITY) && this->m_highRateReports.pop(status); ++edge) {
+        changed = true;
+        if (status != Status::OK) {
+            this->log_WARNING_HI_OperationFailed(Operation::READ_SAMPLE, Manager::toFppStatus(status));
+        }
+    }
+    if (changed) {
+        this->tlmWrite_LastStatus(Manager::toFppStatus(this->m_publishedHighRateStatus.load()));
+        this->tlmWrite_Errors(this->m_errors.load());
+    }
 }
 
 DriverStatus Manager::measurementControl_handler(FwIndexType portNum, bool enable) {
@@ -282,7 +309,7 @@ void Manager::READ_SNAPSHOT_cmdHandler(FwOpcodeType opCode, U32 commandSequence)
     this->tlmWrite_TemperatureCelsius(temperature.celsius);
     this->tlmWrite_StatusRegister(this->m_device.lastStatusRegister());
     this->tlmWrite_SamplesRead(this->m_samplesRead);
-    this->tlmWrite_Errors(this->m_errors);
+    this->tlmWrite_Errors(this->m_errors.load());
     this->tlmWrite_LastStatus(DriverStatus::OK);
     this->publishLifecycle();
     this->respond(opCode, commandSequence, Status::OK);
@@ -319,6 +346,7 @@ Status Manager::initializeDevice(const Configuration& configuration) {
     if (status == Status::OK) {
         this->log_WARNING_HI_OperationFailed_ThrottleClear();
         this->m_lastHighRateStatus = Status::OK;
+        this->m_publishedHighRateStatus.store(Status::OK);
         this->log_ACTIVITY_HI_InitializationComplete(this->m_device.identity().revisionId);
         this->tlmWrite_LastStatus(DriverStatus::OK);
     } else {
@@ -396,29 +424,23 @@ void Manager::recordStatus(Operation operation, Status status) {
     if ((status == Status::OK) || Manager::isOperatorError(status)) {
         return;
     }
-    ++this->m_errors;
-    this->tlmWrite_Errors(this->m_errors);
+    this->tlmWrite_Errors(this->m_errors.fetch_add(1U) + 1U);
     this->log_WARNING_HI_OperationFailed(operation, fppStatus);
 }
 
-void Manager::recordHighRateStatus(Operation operation, Status status) {
-    if (status == Status::OK) {
-        if (this->m_lastHighRateStatus != Status::OK) {
-            this->tlmWrite_LastStatus(DriverStatus::OK);
-        }
-        this->m_lastHighRateStatus = Status::OK;
+void Manager::recordHighRateStatus(Status status) {
+    if (status != Status::OK) {
+        this->m_errors.fetch_add(1U);
+    }
+    if (status == this->m_lastHighRateStatus) {
         return;
     }
-
-    ++this->m_errors;
-    if (status != this->m_lastHighRateStatus) {
-        // Edge-reported and throttled: an intermittent sensor alternating
-        // between OK and failure cannot flood the event stream.
-        const DriverStatus fppStatus = Manager::toFppStatus(status);
-        this->tlmWrite_LastStatus(fppStatus);
-        this->log_WARNING_HI_OperationFailed(operation, fppStatus);
-    }
+    // Edge-reported: schedIn emits the (throttled) event and telemetry off
+    // this path, so an intermittent sensor can neither flood the event stream
+    // nor stretch the frame.
     this->m_lastHighRateStatus = status;
+    this->m_publishedHighRateStatus.store(status);
+    (void)this->m_highRateReports.push(status);
 }
 
 void Manager::respond(FwOpcodeType opCode, U32 commandSequence, Status status) {

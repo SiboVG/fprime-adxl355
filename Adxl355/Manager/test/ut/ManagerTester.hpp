@@ -29,9 +29,11 @@ class ManagerTester final : public ManagerGTestBase {
     void testFailedSelfTestInvalidatesTheDevice();
     void testEveryControlPathReportsBusyWithoutBlocking();
     void testDriverFailuresPropagateThroughTheSpiPort();
+    void testHighRateEdgesBeyondTheQueueAreDropped();
+    void testSchedInNeverWaitsForTheGate();
 
   private:
-    enum class Reentry { NONE, READ_ACCELERATION, STOP_COMMAND, EVERY_CONTROL };
+    enum class Reentry { NONE, READ_ACCELERATION, STOP_COMMAND, EVERY_CONTROL, SCHED_IN };
 
     void connectPorts();
     void initComponents();

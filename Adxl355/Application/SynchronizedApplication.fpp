@@ -4,9 +4,14 @@ module Adxl355 {
   @ acquireFrame runs on the timing thread and never waits: if a command owns
   @ the application gate the trigger is skipped, counted, and still consumes a
   @ sequence number. Reconfiguration commands require acquisition disabled.
+  @ acquireFrame emits no events: it queues frame edges, and schedIn publishes
+  @ them from a rate group.
   passive component SynchronizedApplication {
 
     sync input port acquireFrame: Adxl355.AcquireFrame
+    @ Publishes acquireFrame's edges as FrameIncomplete and FrameRecovered events.
+    @ Connect to a rate group; it never takes the gate, so it cannot cost a frame.
+    sync input port schedIn: Svc.Sched
     output port configureSensor: [Adxl355.MAX_SENSORS] Adxl355.Configure
     output port readSensor: [Adxl355.MAX_SENSORS] Adxl355.ReadAcceleration
     output port frameReady: Adxl355.FrameReady
@@ -27,7 +32,7 @@ module Adxl355 {
       highPassCorner: Adxl355.HighPassCorner
     )
 
-    @ Re-arm throttled frame events; applied by the next frame while enabled.
+    @ Re-arm throttled frame events.
     sync command CLEAR_EVENT_THROTTLE
 
     event SensorCountChanged(sensorCount: U8) severity activity high \

@@ -1,5 +1,5 @@
 # Coverage
-# Recorded 2026-09-29T19:55Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-09-29T21:33Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
 
 ## Portable core (tests/, Apple Clang, llvm-cov gcov)
 100% tests passed, 0 tests failed out of 3
@@ -34,20 +34,20 @@ branches: 93.3% (405 out of 434)
 gate exit status: 0
 
 ## F Prime components (Adxl355/Manager, Application, Platform; --coverage build of the same consumer), CI gate --fail-under-line 85
+[  PASSED  ] 16 tests.
 [  PASSED  ] 14 tests.
-[  PASSED  ] 12 tests.
 File                                       Lines    Exec  Cover   Missing
 ------------------------------------------------------------------------------
 Adxl355/Application/SynchronizedApplication.cpp
-                                             193     185    95%   50,91,177-178,233-234,237-238
-Adxl355/Manager/Manager.cpp                  321     306    95%   15,266-268,278-280,336,348,352,354,356,358,367-368
+                                             193     185    95%   50,91,191-192,241-242,245-246
+Adxl355/Manager/Manager.cpp                  332     317    95%   20,293-295,305-307,364,376,380,382,384,386,395-396
 Adxl355/Platform/OsDelay.cpp                   5       5   100%
 ------------------------------------------------------------------------------
-TOTAL                                        519     496    95%
+TOTAL                                        530     507    95%
 ------------------------------------------------------------------------------
-lines: 95.6% (496 out of 519)
-functions: 100.0% (49 out of 49)
-branches: 53.1% (741 out of 1395)
+lines: 95.7% (507 out of 530)
+functions: 100.0% (51 out of 51)
+branches: 53.3% (757 out of 1419)
 gate exit status: 0
 
 Branch percentages for generated-macro-heavy F Prime sources are reported in the CI artifact but not gated: LLVM counts implicit branches in telemetry and event macros.

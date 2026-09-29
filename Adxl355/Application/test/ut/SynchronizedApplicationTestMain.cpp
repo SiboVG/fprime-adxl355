@@ -60,6 +60,16 @@ TEST(Nominal, EnablingRestartsEdgeDetection) {
     tester.testEnablingRestartsEdgeDetection();
 }
 
+TEST(OffNominal, FrameEdgesBeyondTheQueueAreDropped) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testFrameEdgesBeyondTheQueueAreDropped();
+}
+
+TEST(Concurrency, SchedInPublishesWhileAFrameOwnsTheGate) {
+    Adxl355::SynchronizedApplicationTester tester;
+    tester.testSchedInPublishesWhileAFrameOwnsTheGate();
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

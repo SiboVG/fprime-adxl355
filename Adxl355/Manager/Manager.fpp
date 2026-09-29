@@ -5,12 +5,19 @@ module Adxl355 {
   @ while commands arrive on the dispatcher thread. A non-blocking AccessGate
   @ serializes them; readAcceleration returns BUSY instead of waiting, and every
   @ other handler waits at most CONTROL_ACQUIRE_ATTEMPTS milliseconds.
+  @ readAcceleration emits no events or telemetry: it queues its status edges,
+  @ and schedIn publishes them from a rate group.
   passive component Manager {
 
     sync input port configure: Adxl355.Configure
     sync input port readAcceleration: Adxl355.ReadAcceleration
     sync input port readTemperature: Adxl355.ReadTemperature
     sync input port measurementControl: Adxl355.MeasurementControl
+
+    @ Publishes readAcceleration's status edges: OperationFailed for each failure
+    @ edge, then LastStatus and Errors. Connect to a rate group; it never takes the
+    @ gate, so it cannot cost a sample.
+    sync input port schedIn: Svc.Sched
 
     @ Standard status-returning F Prime SPI port; connect one driver instance per chip select.
     output port spi: Drv.SpiWriteRead

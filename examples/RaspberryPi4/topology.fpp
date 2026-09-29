@@ -26,6 +26,8 @@ module CubeSpecRpi {
     # The containing deployment supplies these mission/platform connections:
     # timingSource.sampleReady -> adxl355App.acquireFrame
     # adxl355App.frameReady -> frameConsumer.frameIn
+    # rateGroup.RateGroupMemberOut[n] -> adxl355App.schedIn (fault events), and
+    # the next two members -> adxl355Manager0.schedIn, adxl355Manager1.schedIn
 
   }
 

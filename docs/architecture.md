@@ -55,8 +55,9 @@ sequenceDiagram
     Managers->>Sensors: STATUS..ZDATA1 burst<br/>(command + 13 bytes)
     Sensors-->>Managers: Status + X/Y/Z
     Managers-->>App: Sample plus DriverStatus
-    Note right of App: Build valid mask<br/>and edge-limit<br/>failure events
+    Note right of App: Build valid mask;<br/>queue validity edges
     App-->>Sink: One SampleFrame<br/>common timestamp
+    Note over Managers,App: Later, in a rate group,<br/>schedIn publishes the<br/>queued edges as events
 ```
 
 A `SampleFrame` contains:
@@ -68,7 +69,9 @@ A `SampleFrame` contains:
 - a valid bit per sensor; and
 - a status per sensor.
 
-One failed read therefore produces a partial frame instead of hiding the other six samples. Incomplete-frame events are emitted only when the valid mask changes, recovery is also edge-reported, and both events are throttled so an intermittent sensor cannot flood the event stream. The high-rate data path emits no per-sample telemetry.
+One failed read therefore produces a partial frame instead of hiding the other six samples. Incomplete-frame events are emitted only when the valid mask changes, recovery is also edge-reported, and both events are throttled so an intermittent sensor cannot flood the event stream.
+
+The acquisition path itself emits no events and writes no telemetry. Formatting and sending an event costs far more than a sensor read: on the TE0715 bench, one fault edge's events and telemetry added about 140 µs to a 32 µs one-sensor frame, the same at 1.1 and 8.9 MHz SCLK. `readAcceleration` and `acquireFrame` therefore record each status or validity edge in a `ReportQueue`, a 16-entry lock-free queue, and each component's `schedIn` port publishes the queued edges from a rate group. The events keep their content (the frame's sequence number, the status); their time tag is the publication time, up to one rate-group period after the edge. Edges beyond 16 between two `schedIn` calls are dropped rather than delay the path; `Errors` and `PartialFrames` still count every failure, and `LastStatus` shows the current status.
 
 ### Freshness and plausibility
 
@@ -86,19 +89,21 @@ Reading STATUS also clears `FIFO_OVR` and the activity bit. The default direct-r
 
 ## Execution context
 
-Both F Prime components are passive, and their handlers run on the calling thread. In a deployment the FPGA timing task calls `acquireFrame`, and the command dispatcher calls every command handler, so two threads reach the same objects. A per-component `AccessGate` (a lock-free `std::atomic<bool>` owner flag) serializes them without letting the acquisition path wait.
+Both F Prime components are passive, and their handlers run on the calling thread. In a deployment the FPGA timing task calls `acquireFrame`, the command dispatcher calls every command handler, and a rate group calls `schedIn`, so three threads reach the same objects. A per-component `AccessGate` (a lock-free `std::atomic<bool>` owner flag) serializes the acquisition path and the commands without letting the acquisition path wait; `schedIn` does not take the gate at all.
 
 | Caller | Thread | Gate behavior | Worst-case hold or wait |
 | --- | --- | --- | --- |
 | `SynchronizedApplication.acquireFrame` | Timing task | Try once; if a command or an overlapping trigger owns the gate, skip the trigger and count it in `SkippedTriggers` | Holds the application gate for one frame (budget below 250 microseconds) |
 | `Manager.readAcceleration` | Timing task, through the application | Try once; return `BUSY` for that sensor only | Holds the manager gate for one 14-byte transfer |
 | Every other manager port and command | Dispatcher or client | Wait at most 10 attempts, 1 ms apart, then return `BUSY` / `EXECUTION_ERROR` and emit `ControlBusy` | 9 ms wait; hold time listed below |
-| Application commands | Dispatcher | `INITIALIZE_ALL`, `INITIALIZE_ALL_INTERNAL`, and `SET_SENSOR_COUNT` are rejected while acquisition is enabled; other commands wait as above | `REPORT` never takes the gate; `CLEAR_EVENT_THROTTLE` defers to the next frame while enabled |
+| Application commands | Dispatcher | `INITIALIZE_ALL`, `INITIALIZE_ALL_INTERNAL`, and `SET_SENSOR_COUNT` are rejected while acquisition is enabled; other commands wait as above | `REPORT` and `CLEAR_EVENT_THROTTLE` never take the gate |
+| `schedIn` (application and managers) | Rate group, below the timing task | None: it reads the lock-free report queue and atomic counters; F Prime keeps event throttle counters in atomics | Publishes at most 16 queued edges per call |
 
 Consequences an integrator must plan for:
 
 - A manager command sent during science acquisition costs that sensor the frames it overlaps, reported as `BUSY` in `sensorStatus`; it never stalls the other sensors. `READ_SNAPSHOT` holds the gate for three short transfers and never reads STATUS, so it cannot consume the acquisition path's `DATA_RDY`.
 - Initialization blocks the calling thread. One sensor normally takes a few milliseconds; the bound is `MAX_RESET_ATTEMPTS` (3) resets, each waiting up to 256 ms for `NVM_BUSY`, which is about 0.77 s. `INITIALIZE_ALL` for seven sensors is therefore bounded at about 5.4 s on the command dispatcher thread. Size health-ping timeouts for that bound, or route initialization through an active component.
+- Connect `schedIn` of the application and of every manager to one rate group whose thread runs below the timing task. Without it the fault edges are never reported; a period of 1 s or faster keeps them timely.
 - The same caller stack holds the frame plus the SPI buffers. Transfers of up to 16 data bytes use 17-byte buffers; only a full FIFO read uses the 289-byte pair. Include this depth when sizing the timing task stack; the library performs no heap allocation in these paths.
 
 At 4 kHz the period is 250 microseconds. Seven 14-byte (112-bit) status-checked transactions require 78.4 microseconds at 10 MHz or 156.8 microseconds at 5 MHz, before chip-select gaps and software overhead. The four status bytes add 22.4 microseconds per frame at 10 MHz; that is the price of detecting stale and implausible data without a status-bearing transport. A Zynq/FPGA-backed real-time SPI implementation is preferable to Linux userspace when hard timing guarantees matter.

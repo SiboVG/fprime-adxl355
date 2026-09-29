@@ -3,21 +3,26 @@
 
 #include "Adxl355/Application/SynchronizedApplicationComponentAc.hpp"
 #include "Adxl355/Device/AccessGate.hpp"
+#include "Adxl355/Device/ReportQueue.hpp"
 #include "Adxl355/Platform/OsDelay.hpp"
 
 #include <atomic>
 
 namespace Adxl355 {
 
-//! Execution context: acquireFrame runs on the timing thread; commands run on
-//! the command dispatcher thread. The frame body and every reconfiguration run
-//! under m_gate. State read by REPORT or by the trigger before it owns the gate
-//! is atomic; everything else is touched only by the gate owner.
+//! Execution context: acquireFrame runs on the timing thread, schedIn on a rate
+//! group, commands on the command dispatcher thread. The frame body and every
+//! reconfiguration run under m_gate. State read by REPORT, by schedIn or by the
+//! trigger before it owns the gate is atomic or in the lock-free report queue;
+//! everything else is touched only by the gate owner.
 class SynchronizedApplication final : public SynchronizedApplicationComponentBase {
   public:
     //! Attempts (1 ms apart) a command makes to take the gate. A frame holds
     //! it for less than one 250 microsecond period.
     static const U32 CONTROL_ACQUIRE_ATTEMPTS = 10U;
+    //! Frame edges held for schedIn; beyond this many between two schedIn calls
+    //! the rest are dropped. PartialFrames still counts every partial frame.
+    static const std::size_t FRAME_REPORT_CAPACITY = 16U;
 
     explicit SynchronizedApplication(const char* const componentName);
     ~SynchronizedApplication();
@@ -26,7 +31,16 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
     DriverStatus configure(U8 sensorCount);
 
   private:
+    //! A partial frame whose valid mask differs from the previous frame's, or
+    //! the first complete frame after partial ones.
+    struct FrameReport {
+        U64 sequence;
+        U8 validMask;
+        bool recovered;
+    };
+
     void acquireFrame_handler(FwIndexType portNum, U64 syncTimeMicroseconds) override;
+    void schedIn_handler(FwIndexType portNum, U32 context) override;
 
     void INITIALIZE_ALL_cmdHandler(FwOpcodeType opCode,
                                    U32 commandSequence,
@@ -52,7 +66,6 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
     OsDelay m_delay;
     AccessGate m_gate;
     std::atomic<bool> m_enabled;
-    std::atomic<bool> m_throttleClearRequested;
     std::atomic<U8> m_sensorCount;
     std::atomic<U8> m_initializedMask;
     std::atomic<U8> m_lastValidMask;
@@ -60,6 +73,7 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
     std::atomic<U64> m_frames;
     std::atomic<U64> m_partialFrames;
     std::atomic<U64> m_skippedTriggers;
+    ReportQueue<FrameReport, FRAME_REPORT_CAPACITY> m_frameReports;
 };
 
 }  // namespace Adxl355

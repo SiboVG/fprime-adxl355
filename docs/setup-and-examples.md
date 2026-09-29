@@ -45,6 +45,14 @@ Connect the platform's FPGA interrupt/timing component to the application:
 fpgaSync.sampleReady -> adxl355App.acquireFrame
 ```
 
+The acquisition path emits no events; connect a rate group that runs below the timing task to `schedIn` of the application and of every manager, which publishes the fault edges it queued:
+
+```fpp
+rateGroup.RateGroupMemberOut[0] -> adxl355App.schedIn
+rateGroup.RateGroupMemberOut[1] -> adxl355Manager0.schedIn
+# Repeat for managers 1 through 6
+```
+
 `sampleReady` must carry the timestamp of the common synchronization instant, not the later time at which the last SPI transaction completes. Connect `frameReady` to storage, feature extraction, downsampling, or packetization appropriate to the mission; do not route 4 kHz x 7 raw data through ordinary channel telemetry.
 
 The complete copyable connection set is in `examples/SevenSensorTopology`.
@@ -147,7 +155,7 @@ Each `PlatformSpi` instance must bind one chip select for the full transfer. The
 Before merging the library into an application deployment:
 
 - allocate nonoverlapping base IDs and connect command, event, telemetry, text-event, and time patterns;
-- invoke `acquireFrame` from one timing task, expect `BUSY` for a sensor whose manager is executing a command, and size command-dispatcher health pings for the documented initialization bound;
+- invoke `acquireFrame` from one timing task and `schedIn` from a rate group below it, expect `BUSY` for a sensor whose manager is executing a command, and size command-dispatcher health pings for the documented initialization bound;
 - verify SPI mode, maximum frequency, chip-select ownership, buffer limits, and startup order;
 - use a platform SPI driver that reports failures through `Drv.SpiWriteRead` (as `Drv.LinuxSpiDriver` and fprime-zephyr's `ZephyrSpiDriver` do), and test injected controller failures end to end;
 - budget and then measure stack usage and worst-case execution time under representative load;

@@ -27,7 +27,7 @@ Three executables run:
 
 - `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, temperature conversion, tear rejection and plausibility, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
 - `adxl355-integration-tests` creates seven independent emulators and `Device` objects behind the portable `SynchronizedArray`. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, and fault containment for failed, stopped, and stale sensors.
-- `adxl355-gate-tests` verifies the `AccessGate` contract, including a two-thread test that no two owners ever overlap.
+- `adxl355-gate-tests` verifies the `AccessGate` contract, including a two-thread test that no two owners ever overlap, and the `ReportQueue` contract: order, drops when full, wrap-around, and a two-thread test that every record arrives intact and in order or is counted as dropped.
 
 ## F Prime tool chain
 
@@ -71,9 +71,9 @@ cmake --build /tmp/adxl355-components \
 /tmp/adxl355-components/bin/$(uname)/Adxl355_Application_ut_exe
 ```
 
-The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges, stuck-bus and stale-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, and every other command and port must report `BUSY` after a bounded wait without changing device state.
+The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges published only by `schedIn` (including edges dropped beyond the queue), stuck-bus and stale-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, every other command and port must report `BUSY` after a bounded wait without changing device state, and `schedIn` must publish at once.
 
-The application tests exercise seven-port fan-out, internal- and external-clock initialization, partial initialization, frame aggregation, disabled acquisition, the enabled-state reconfiguration interlock, throttled events from an intermittent sensor, deferred throttle clearing, overlapping triggers that must be skipped and leave a sequence gap, commands rejected while initialization owns the gate, and edge-detection restart.
+The application tests exercise seven-port fan-out, internal- and external-clock initialization, partial initialization, frame aggregation, disabled acquisition, the enabled-state reconfiguration interlock, throttled events from an intermittent sensor published by `schedIn`, immediate throttle clearing, frame edges dropped beyond the queue, `schedIn` publishing while a frame owns the gate, overlapping triggers that must be skipped and leave a sequence gap, commands rejected while initialization owns the gate, and edge-detection restart.
 
 The workflow job `fprime-components` checks out F Prime at the tested revision, runs both executables with coverage instrumentation, and enforces a line-coverage gate on `Adxl355/Manager`, `Adxl355/Application`, and `Adxl355/Platform`.
 

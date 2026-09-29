@@ -31,6 +31,8 @@ Runtime controls are rejected with `INVALID_STATE` while the device is `UNCONFIG
 
 `Adxl355/Device/AccessGate.hpp` provides the non-blocking single-owner gate the F Prime components use. `tryAcquire` never waits; `acquire(delay, attempts)` retries 1 ms apart.
 
+`Adxl355/Device/ReportQueue.hpp` provides the fixed-capacity single-producer, single-consumer queue that carries fault edges from the acquisition path to `schedIn`. `push` and `pop` never wait; a full queue drops the record and counts it (`takeDropped`).
+
 ## FPP ports
 
 | Port | Direction and use |
@@ -42,6 +44,7 @@ Runtime controls are rejected with `INVALID_STATE` while the device is `UNCONFIG
 | `AcquireFrame` | FPGA timing source to synchronized application; carries the sampling timestamp |
 | `FrameReady` | Synchronized application to downstream processing; carries a fixed-capacity frame |
 | `Drv.SpiWriteRead` | Manager to generic platform SPI driver; returns `Drv.SpiStatus`, and any failure becomes `SPI_ERROR` |
+| `Svc.Sched` (`schedIn`) | Rate group to the manager and to the application; publishes the fault edges the acquisition path queued; never takes the gate |
 
 ## `Adxl355.Manager` commands
 
@@ -54,7 +57,7 @@ Runtime controls are rejected with `INVALID_STATE` while the device is `UNCONFIG
 
 Every command waits at most 10 ms for the manager's gate and otherwise responds `EXECUTION_ERROR` with a `ControlBusy` event. Invalid arguments respond `VALIDATION_ERROR`; they and out-of-sequence commands do not increment `Errors` or emit `OperationFailed`.
 
-The synchronous high-rate `readAcceleration` port does not emit six acceleration channels on every call. It increments an internal counter; `READ_SNAPSHOT` is the intentional telemetry/downsampling point. `Initialized`, `Measuring`, and `SelfTest` telemetry is republished after every state-changing operation.
+The synchronous high-rate `readAcceleration` port emits no events or telemetry. It increments internal counters and queues status edges; `schedIn` publishes them as `OperationFailed` (one per failure edge, throttled), followed by `LastStatus` (the current status) and `Errors`. `READ_SNAPSHOT` is the intentional telemetry/downsampling point for samples. `Initialized`, `Measuring`, and `SelfTest` telemetry is republished after every state-changing operation.
 
 ## `Adxl355.SynchronizedApplication` commands
 
@@ -63,7 +66,9 @@ The synchronous high-rate `readAcceleration` port does not emit six acceleration
 - `SET_SENSOR_COUNT(count)` selects 1 through 7 managers.
 - `SET_ENABLED(enabled)` gates acquisition callbacks without changing sensor power state. Enabling restarts edge detection and clears the event throttles; the disable response is sent only after any frame in progress has finished.
 - `REPORT` emits frame counters, partial-frame count, last valid mask, configured sensor count, enabled state, initialized mask, and `SkippedTriggers`, without affecting acquisition.
-- `CLEAR_EVENT_THROTTLE` re-arms `FrameIncomplete` and `FrameRecovered`; while enabled, the next frame applies it.
+- `CLEAR_EVENT_THROTTLE` re-arms `FrameIncomplete` and `FrameRecovered` at once, also while acquisition is enabled; it never takes the gate.
+
+`acquireFrame` emits no events: it queues validity edges, and `schedIn` publishes them as `FrameIncomplete(sequence, validMask)` and `FrameRecovered(sequence)`, with the sequence number of the frame each edge occurred in.
 
 `INITIALIZE_ALL`, `INITIALIZE_ALL_INTERNAL`, `SET_SENSOR_COUNT`, and the topology-time `configure(sensorCount)` are rejected while acquisition is enabled (`ReconfigurationRejected` event, `EXECUTION_ERROR`).
 
