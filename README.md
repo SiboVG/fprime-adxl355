@@ -64,7 +64,7 @@ the generated F Prime component tests against that F Prime revision with a compo
 line-coverage gate. `clang-tidy` runs with warnings treated as errors on both the
 core and the component sources. Executed results are retained in `docs/evidence/`
 and pinned to the exact sources. Before the move to F Prime `35d4c0e`, the first remote workflow run to pass every job was
-[run 36331079661](https://github.com/SiboVG/CubeSpec_FlightSoftware/actions/runs/36331079661) on commit `354b404`.
+[run 36331079661](https://github.com/SiboVG/fprime-adxl355/actions/runs/36331079661) on commit `354b404`.
 
 Pending hardware execution includes the physical Raspberry Pi/EVAL-ADXL355Z
 bring-up, external-clock and synchronization captures, seven-sensor
