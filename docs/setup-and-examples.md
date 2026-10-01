@@ -160,7 +160,7 @@ Before merging the library into an application deployment:
 - use a platform SPI driver that reports failures through `Drv.SpiWriteRead` (as `Drv.LinuxSpiDriver` and fprime-zephyr's `ZephyrSpiDriver` do), and test injected controller failures end to end;
 - budget and then measure stack usage and worst-case execution time under representative load;
 - keep 4 kHz raw frames on a dedicated data path rather than ordinary channel telemetry;
-- specify health-monitor and retry policy for a missing clock (`STALE_DATA`), a lost synchronization pulse train, invalid masks, sequence gaps and `SkippedTriggers`, `NVM_MISMATCH`, and repeated failures;
+- specify health-monitor and retry policy for a missing clock (`STALE_DATA`, or `FROZEN_DATA` when it stops after running), a lost synchronization pulse train, invalid masks, sequence gaps and `SkippedTriggers`, `NVM_MISMATCH`, and repeated failures;
 - power-cycle the sensors before the first initialization after a flight-software restart where possible (NVM shadow reference); and
 - treat calibration, axis alignment, and science filtering as application responsibilities.
 

@@ -144,6 +144,36 @@ ADXL355_TEST(StaleSensorIsFlaggedWithoutHidingFreshPeers) {
     EXPECT_EQ(static_cast<std::int32_t>(3), frame.samples[2].raw.x);
 }
 
+ADXL355_TEST(FrozenSensorIsFlaggedWithoutHidingFreshPeers) {
+    Adxl355Test::RegisterSpi spi[3];
+    Adxl355Test::RecordingDelay delay[3];
+    Adxl355::Device first(spi[0], delay[0]);
+    Adxl355::Device second(spi[1], delay[1]);
+    Adxl355::Device third(spi[2], delay[2]);
+    Adxl355::SynchronizedArray array;
+    EXPECT_EQ(Adxl355::Status::OK, array.add(first));
+    EXPECT_EQ(Adxl355::Status::OK, array.add(second));
+    EXPECT_EQ(Adxl355::Status::OK, array.add(third));
+    std::uint8_t initializedMask = 0U;
+    EXPECT_EQ(Adxl355::Status::OK,
+              array.initializeAll(Adxl355Test::synchronizedConfiguration(), initializedMask));
+
+    // Sensor 1's clock stops after a conversion; its peers keep converting.
+    spi[1].setRawSample(2, 0, 0);
+    spi[1].clockStopped = true;
+    Adxl355::SynchronizedFrame frame;
+    for (std::uint32_t sequence = 0U; sequence <= Adxl355::Device::FROZEN_REPEAT_LIMIT; ++sequence) {
+        spi[0].setRawSample(static_cast<std::int32_t>(sequence), 1, 0);
+        spi[2].setRawSample(static_cast<std::int32_t>(sequence), 3, 0);
+        const Adxl355::Status status = array.readFrame(sequence, frame);
+        EXPECT_EQ((sequence < Adxl355::Device::FROZEN_REPEAT_LIMIT) ? Adxl355::Status::OK : Adxl355::Status::PARTIAL,
+                  status);
+    }
+    EXPECT_EQ(static_cast<std::uint8_t>(0x05), frame.validMask);
+    EXPECT_EQ(Adxl355::Status::FROZEN_DATA, frame.sensorStatus[1]);
+    EXPECT_EQ(static_cast<std::int32_t>(3), frame.samples[2].raw.y);
+}
+
 ADXL355_TEST(EmptyArrayRejectsInitializationAndFrames) {
     Adxl355::SynchronizedArray array;
     std::uint8_t initializedMask = 0xFFU;

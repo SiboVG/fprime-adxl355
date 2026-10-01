@@ -1,11 +1,16 @@
 # Static analysis: clang-tidy (clang-analyzer-*, warnings as errors, .clang-tidy)
-# Recorded 2026-09-29T21:33Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
-clang-tidy: Homebrew LLVM version 18.1.8
-Local macOS invocation adds --extra-arg=-nostdinc++ --extra-arg=-isystem<llvm@18>/include/c++/v1 --extra-arg=-isysroot --extra-arg=<MacOSX26.5.sdk>, because LLVM 18 cannot parse the macOS 27 SDK headers; the analyzed sources and compile flags are otherwise those of the default-SDK builds
+clang-tidy: LLVM version 22.1.8 (PyPI clang-tidy wheel, run through uvx)
 
-$ clang-tidy --warnings-as-errors=* -p build-host Adxl355/Device/Device.cpp Adxl355/Device/AccessGate.cpp Adxl355/Array/SynchronizedArray.cpp
+$ clang-tidy --warnings-as-errors=* -p build-static Adxl355/Device/Device.cpp Adxl355/Device/AccessGate.cpp Adxl355/Array/SynchronizedArray.cpp
+[1/3] Processing file Adxl355/Device/Device.cpp.
+[2/3] Processing file Adxl355/Device/AccessGate.cpp.
+[3/3] Processing file Adxl355/Array/SynchronizedArray.cpp.
 exit status: 0
 
 $ clang-tidy --warnings-as-errors=* -p build-components Adxl355/Manager/Manager.cpp Adxl355/Application/SynchronizedApplication.cpp Adxl355/Platform/OsDelay.cpp
+[1/3] Processing file Adxl355/Manager/Manager.cpp.
+[2/3] Processing file Adxl355/Application/SynchronizedApplication.cpp.
+[3/3] Processing file Adxl355/Platform/OsDelay.cpp.
 exit status: 0

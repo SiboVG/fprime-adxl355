@@ -133,6 +133,71 @@ ADXL355_TEST(MissingExternalClockIsStaleRatherThanZeroAcceleration) {
     EXPECT_EQ(static_cast<std::int32_t>(5), sample.raw.x);
 }
 
+ADXL355_TEST(StoppedExternalClockIsFrozenDataAfterTheRepeatLimit) {
+    RegisterSpi spi;
+    RecordingDelay delay;
+    Device device(spi, delay);
+    EXPECT_EQ(Status::OK, device.initialize(synchronizedConfiguration()));
+    spi.setRawSample(10, 20, 30);
+    Sample sample;
+    EXPECT_EQ(Status::OK, device.readSample(sample));
+
+    // The last conversion before the clock stops: afterwards DATA_RDY stays set
+    // and every read returns the same axes.
+    spi.setRawSample(11, 21, 31);
+    spi.clockStopped = true;
+    EXPECT_EQ(Status::OK, device.readSample(sample));
+    for (std::uint8_t repeat = 1U; repeat < Device::FROZEN_REPEAT_LIMIT; ++repeat) {
+        EXPECT_EQ(Status::OK, device.readSample(sample));
+    }
+    sample.raw.x = 5;
+    EXPECT_EQ(Status::FROZEN_DATA, device.readSample(sample));
+    EXPECT_EQ(static_cast<std::int32_t>(5), sample.raw.x);
+    EXPECT_EQ(Status::FROZEN_DATA, device.readSample(sample));
+    EXPECT_TRUE((device.lastStatusRegister() & 0x01U) != 0U);
+
+    // The clock returns: the next conversion is fresh again, without reinitialization.
+    spi.clockStopped = false;
+    spi.setRawSample(12, 22, 32);
+    EXPECT_EQ(Status::OK, device.readSample(sample));
+    EXPECT_EQ(static_cast<std::int32_t>(12), sample.raw.x);
+    EXPECT_EQ(Status::STALE_DATA, device.readSample(sample));
+}
+
+ADXL355_TEST(RepeatCountRestartsOnANewSampleAndOnMeasurementStart) {
+    RegisterSpi spi;
+    RecordingDelay delay;
+    Device device(spi, delay);
+    EXPECT_EQ(Status::OK, device.initialize(synchronizedConfiguration()));
+    Sample sample;
+
+    // Identical new conversions count as repeats; stale reads between them
+    // neither count nor restart the count.
+    spi.setRawSample(1, 2, 3);
+    EXPECT_EQ(Status::OK, device.readSample(sample));
+    for (std::uint8_t repeat = 1U; repeat < Device::FROZEN_REPEAT_LIMIT; ++repeat) {
+        EXPECT_EQ(Status::STALE_DATA, device.readSample(sample));
+        spi.setRawSample(1, 2, 3);
+        EXPECT_EQ(Status::OK, device.readSample(sample));
+    }
+    // One axis differing by one LSB restarts the count; then the clock stops.
+    spi.setRawSample(1, 2, 4);
+    spi.clockStopped = true;
+    EXPECT_EQ(Status::OK, device.readSample(sample));
+    for (std::uint8_t repeat = 1U; repeat < Device::FROZEN_REPEAT_LIMIT; ++repeat) {
+        EXPECT_EQ(Status::OK, device.readSample(sample));
+    }
+
+    // A measurement start restarts it too: the first read after it is never a repeat.
+    EXPECT_EQ(Status::OK, device.stopMeasurement());
+    EXPECT_EQ(Status::OK, device.startMeasurement());
+    for (std::uint8_t read = 0U; read < Device::FROZEN_REPEAT_LIMIT; ++read) {
+        EXPECT_EQ(Status::OK, device.readSample(sample));
+    }
+    EXPECT_EQ(Status::FROZEN_DATA, device.readSample(sample));
+    EXPECT_EQ(static_cast<std::int32_t>(4), sample.raw.z);
+}
+
 ADXL355_TEST(StuckMisoIsRejectedAsImplausibleOrStale) {
     RegisterSpi spi;
     RecordingDelay delay;

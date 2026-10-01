@@ -20,7 +20,7 @@ The implementation uses the constraints in `CS EM ACC Design Notes.docx` for the
 
 With the external clock enabled, `INT2` cannot also carry an interrupt (data sheet Table 14 notes the mapping is ignored). The library rejects configurations that map an interrupt to `INT2` while `EXT_CLK` is set. It also rejects `EXT_SYNC = 01` without `EXT_CLK`, which Table 14 marks as not recommended because the digital filters reset on every synchronization pulse.
 
-If the external clock is missing in this mode, the data sheet states that the device processes no data and the outputs read as null values. The library reports that as `STALE_DATA` for every sensor rather than as valid zero acceleration. If only the synchronization pulses stop, the sensors keep running synchronized to the last pulse, so the FPGA timing path must monitor the pulse train.
+If the external clock is missing in this mode, the data sheet states that the device processes no data and the outputs read as null values. The library reports that as `STALE_DATA` for every sensor rather than as valid zero acceleration. If the clock stops after it has run, the device freezes with `DATA_RDY` set and keeps returning its last sample. The library reports that as `FROZEN_DATA` after eight repeated reads (ADXL-DEV-013). If only the synchronization pulses stop, the sensors keep running synchronized to the last pulse, so the FPGA timing path must monitor the pulse train.
 
 ## Timing
 
@@ -41,14 +41,16 @@ The board design notes recommend gating the distributed SCLK so idle clock activ
 
 ## Recommended startup order
 
-1. Keep application acquisition disabled and hold back synchronization pulses.
-2. Start and stabilize the 1.024 MHz external clock.
-3. Configure all SPI endpoints for mode 0 and no more than 10 MHz.
-4. Run `INITIALIZE_ALL`; require initialized mask `0x7F` for a nominal start.
+1. Keep application acquisition disabled, and hold the 1.024 MHz clock and the synchronization pulses low.
+2. Configure all SPI endpoints for mode 0 and no more than 10 MHz.
+3. Run `INITIALIZE_ALL`; require initialized mask `0x7F` for a nominal start. Until it has written the `SYNC` register, and again from the software reset it starts with, `INT2` and `DRDY` are outputs, so nothing may drive them yet. Initialization does not need the external clock.
+4. Start and stabilize the 1.024 MHz external clock.
 5. Start the 4 kHz synchronization pulse train.
 6. Wait at least one filter group delay (a few frame periods). The data sheet notes that one to three samples after the first synchronization pulse can be lost or corrupted.
 7. Enable frame acquisition.
 8. Check the first frames for sequence continuity, `validMask == 0x7F`, `SkippedTriggers == 0`, and sensible temperature. `FIFO_OVR` in `StatusRegister` is expected because the direct-read path does not drain the stream-mode FIFO.
+
+For a reinitialization, disable acquisition and stop the pulses and the clock (both low) first, then repeat from step 3.
 
 ## Software reset and NVM trim
 

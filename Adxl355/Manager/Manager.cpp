@@ -390,6 +390,8 @@ DriverStatus Manager::toFppStatus(Status status) {
             return DriverStatus::IMPLAUSIBLE_DATA;
         case Status::NVM_MISMATCH:
             return DriverStatus::NVM_MISMATCH;
+        case Status::FROZEN_DATA:
+            return DriverStatus::FROZEN_DATA;
     }
     // Unreachable: every core status has an FPP mapping.
     FW_ASSERT(0, static_cast<FwAssertArgType>(status));

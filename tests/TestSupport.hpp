@@ -27,6 +27,9 @@ class RecordingDelay final : public Adxl355::Delay {
 //! writable bit masks from Tables 15-51, DATA_RDY/FIFO_OVR/activity cleared by
 //! a STATUS read, shadow trim registers 0x50-0x54 reloaded by a software reset.
 //! The die starts at the nominal 25 C (raw 1885), which a reset does not change.
+//! With clockStopped, the digital core has lost its external clock: a STATUS
+//! read no longer clears DATA_RDY, FIFO_OVR, or the activity bit (TE0715 bench,
+//! 2026-10-02), and no new sample arrives unless a test sets one.
 class RegisterSpi final : public Adxl355::SpiBus {
   public:
     enum class Miso { DRIVEN, STUCK_LOW, STUCK_HIGH };
@@ -37,6 +40,7 @@ class RegisterSpi final : public Adxl355::SpiBus {
           transactions(),
           temperatureReads(),
           miso(Miso::DRIVEN),
+          clockStopped(false),
           failNext(false),
           ignorePowerWrites(false),
           failWriteAddress(-1),
@@ -149,6 +153,7 @@ class RegisterSpi final : public Adxl355::SpiBus {
     //! Successive TEMP2/TEMP1 burst reads return these values first.
     std::vector<std::uint16_t> temperatureReads;
     Miso miso;
+    bool clockStopped;
     bool failNext;
     bool ignorePowerWrites;
     int failWriteAddress;
@@ -220,8 +225,11 @@ class RegisterSpi final : public Adxl355::SpiBus {
                 receive[statusIndex] = static_cast<std::uint8_t>(receive[statusIndex] | 0x10U);
                 --nvmBusyReads;
             }
-            // DATA_RDY, FIFO_OVR, and activity clear on a STATUS read.
-            registers[0x04] = static_cast<std::uint8_t>(registers[0x04] & ~0x0DU);
+            // DATA_RDY, FIFO_OVR, and activity clear on a STATUS read, done by
+            // the clocked digital core.
+            if (!clockStopped) {
+                registers[0x04] = static_cast<std::uint8_t>(registers[0x04] & ~0x0DU);
+            }
         }
     }
 

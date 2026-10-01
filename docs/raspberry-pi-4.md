@@ -193,14 +193,14 @@ With all equipment powered down:
 3. Connect one 4 kHz, 3.3 V synchronization output to P1 pin 6 `DRDY/SYNC` on both sensors.
 4. Keep the SPI and separate-CS wiring unchanged.
 
-Configure the generator so the synchronization pulse is at least 3.91 microseconds wide and meets the data-sheet setup requirement relative to the external clock. Start and stabilize the 1.024 MHz clock before sensor initialization.
+Configure the generator so the synchronization pulse is at least 3.91 microseconds wide and meets the data-sheet setup requirement relative to the external clock. Keep both outputs off (low) until the sensors are initialized: until then `INT2` and `DRDY` are sensor outputs (ADXL-INT-003).
 
 Then:
 
 1. Send `SET_ENABLED(false)` and `SET_SENSOR_COUNT(2)` to the application.
 2. Send `INITIALIZE_ALL(G2, HZ_4000, OFF)`. This is the external-clock, no-interpolation flight preset.
 3. Confirm `InitializedMask == 0x03`.
-4. Start the 4 kHz synchronization pulses.
+4. Start and stabilize the 1.024 MHz clock, then start the 4 kHz synchronization pulses.
 5. Enable the deployment timing component that invokes `acquireFrame` after the corresponding result is available, while passing the timestamp of that synchronization edge.
 6. Send `SET_ENABLED(true)` and verify frames have `validMask == 0x03`.
 

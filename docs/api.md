@@ -10,7 +10,7 @@ Include `Adxl355/Device/Device.hpp`. Construct one `Device` per chip select with
 | `readIdentity` / `readStatus` | Read identity or decoded status flags. A STATUS read clears `DATA_RDY`, `FIFO_OVR`, and activity. |
 | `softReset` | Capture the shadow reference if not yet captured, reset, poll `NVM_BUSY`, and repeat up to three times until the shadow registers match |
 | `startMeasurement` / `stopMeasurement` | Change `POWER_CTL.STANDBY`; start requires a verified configuration, stop is always allowed |
-| `readSample` | Status-checked acquisition read: one STATUS..ZDATA1 burst; `STALE_DATA` when no newer sample exists, `IMPLAUSIBLE_DATA` for impossible status bytes; output written only on `OK` |
+| `readSample` | Status-checked acquisition read: one STATUS..ZDATA1 burst; `STALE_DATA` when no newer sample exists, `IMPLAUSIBLE_DATA` for impossible status bytes, `FROZEN_DATA` once `FROZEN_REPEAT_LIMIT` (8) reads in a row repeat the sample before them with `DATA_RDY` set; output written only on `OK` |
 | `readRawSample` | Diagnostic nine-byte X/Y/Z read without STATUS: no freshness check and no side effects |
 | `scale(raw, sample)` | Convert raw counts to SI units for the configured range |
 | `readTemperature` | Read the 12-bit temperature until two consecutive reads agree, then convert to degrees Celsius; `IMPLAUSIBLE_DATA` when TEMP2's reserved bits are set or the value lies outside −55 °C to +150 °C |
@@ -74,7 +74,7 @@ The synchronous high-rate `readAcceleration` port emits no events or telemetry. 
 
 ## Status values
 
-`DriverStatus` distinguishes invalid arguments/configuration/state, SPI errors, identity mismatch, reset timeout, readback mismatch, FIFO misalignment/empty conditions, partial aggregate success, capacity overflow, `BUSY` (a control operation owns the manager), `STALE_DATA` (no newer sample), `IMPLAUSIBLE_DATA` (bus data impossible for an ADXL355), and `NVM_MISMATCH` (factory trim did not reload correctly). A frame is complete only when `validMask == (1 << sensorCount) - 1`.
+`DriverStatus` distinguishes invalid arguments/configuration/state, SPI errors, identity mismatch, reset timeout, readback mismatch, FIFO misalignment/empty conditions, partial aggregate success, capacity overflow, `BUSY` (a control operation owns the manager), `STALE_DATA` (no newer sample), `IMPLAUSIBLE_DATA` (bus data impossible for an ADXL355), `NVM_MISMATCH` (factory trim did not reload correctly), and `FROZEN_DATA` (`DATA_RDY` set, but the device has stopped converting, for example after its external clock stopped). A frame is complete only when `validMask == (1 << sensorCount) - 1`.
 
 The portable `SynchronizedArray` rejects devices that are not measuring with
 `INVALID_STATE` without bus I/O, clears their valid bits, and preserves healthy

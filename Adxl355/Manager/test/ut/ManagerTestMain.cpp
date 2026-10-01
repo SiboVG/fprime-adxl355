@@ -40,6 +40,11 @@ TEST(OffNominal, ImplausibleBusDataIsRejected) {
     tester.testImplausibleBusDataIsRejected();
 }
 
+TEST(OffNominal, StoppedClockIsReportedAsFrozenData) {
+    Adxl355::ManagerTester tester;
+    tester.testStoppedClockIsReportedAsFrozenData();
+}
+
 TEST(Concurrency, HighRateReadNeverWaitsForAControlOperation) {
     Adxl355::ManagerTester tester;
     tester.testHighRateReadNeverWaitsForAControlOperation();

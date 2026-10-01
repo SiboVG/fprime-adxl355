@@ -15,7 +15,7 @@ flowchart BT
 
 ## Host unit and integration tests
 
-The host suite compiles the hardware-independent core with C++11, `-Wall -Wextra -Werror -pedantic`, and an in-memory ADXL355 register/SPI emulator. The emulator follows the data sheet: writable bit masks per register, `DATA_RDY`/`FIFO_OVR`/activity cleared by a STATUS read, shadow trim registers reloaded by a software reset (with an injectable bad load), stuck-low and stuck-high MISO, ignored writes, and scripted temperature tearing.
+The host suite compiles the hardware-independent core with C++11, `-Wall -Wextra -Werror -pedantic`, and an in-memory ADXL355 register/SPI emulator. The emulator follows the data sheet: writable bit masks per register, `DATA_RDY`/`FIFO_OVR`/activity cleared by a STATUS read, shadow trim registers reloaded by a software reset (with an injectable bad load), stuck-low and stuck-high MISO, ignored writes, scripted temperature tearing, and a stopped external clock under which a STATUS read no longer clears `DATA_RDY`.
 
 ```sh
 cmake -S libraries/fprime-adxl355/tests -B /tmp/adxl355-host-tests -G Ninja
@@ -25,8 +25,8 @@ ctest --test-dir /tmp/adxl355-host-tests --output-on-failure
 
 Three executables run:
 
-- `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, temperature conversion, tear rejection and plausibility, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
-- `adxl355-integration-tests` creates seven independent emulators and `Device` objects behind the portable `SynchronizedArray`. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, and fault containment for failed, stopped, and stale sensors.
+- `adxl355-unit-tests` covers command-byte encoding, identity validation, signed 20-bit decoding, SI scaling by range, status-checked freshness and plausibility, frozen-sample detection, temperature conversion, tear rejection and plausibility, bounded reset polling, the NVM shadow-register check, board synchronization programming, every programming and readback failure after reset, lifecycle transitions, FIFO bounds and markers, runtime controls, self-test tracking, and argument validation.
+- `adxl355-integration-tests` creates seven independent emulators and `Device` objects behind the portable `SynchronizedArray`. It verifies all-device initialization, a common timestamp and sequence, fixed read order, valid masks, and fault containment for failed, stopped, stale, and frozen sensors.
 - `adxl355-gate-tests` verifies the `AccessGate` contract, including a two-thread test that no two owners ever overlap, and the `ReportQueue` contract: order, drops when full, wrap-around, and a two-thread test that every record arrives intact and in order or is counted as dropped.
 
 ## F Prime tool chain
@@ -71,7 +71,7 @@ cmake --build /tmp/adxl355-components \
 /tmp/adxl355-components/bin/$(uname)/Adxl355_Application_ut_exe
 ```
 
-The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges published only by `schedIn` (including edges dropped beyond the queue), stuck-bus and stale-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, every other command and port must report `BUSY` after a bounded wait without changing device state, and `schedIn` must publish at once.
+The manager tests drive only ports and commands: configuration and reads, every control command, validation errors that must not count as faults, throttled high-rate failure edges published only by `schedIn` (including edges dropped beyond the queue), stuck-bus, stale-data, and frozen-data rejection, failed initialization and self-test, NVM mismatch, and snapshot/acquisition independence. The gate is exercised deterministically by re-entering the component from the SPI callback while a command owns it: the high-rate read must return `BUSY` at once, every other command and port must report `BUSY` after a bounded wait without changing device state, and `schedIn` must publish at once.
 
 The application tests exercise seven-port fan-out, internal- and external-clock initialization, partial initialization, frame aggregation, disabled acquisition, the enabled-state reconfiguration interlock, throttled events from an intermittent sensor published by `schedIn`, immediate throttle clearing, frame edges dropped beyond the queue, `schedIn` publishing while a frame owns the gate, overlapping triggers that must be skipped and leave a sequence gap, commands rejected while initialization owns the gate, and edge-detection restart.
 
@@ -127,13 +127,13 @@ Emulator tests do not prove electrical timing. Before flight use, run an HIL tes
 3. Measure worst-case acquisition duration (seven 14-byte reads) under flight CPU load; require margin below 250 microseconds.
 4. Apply the same static acceleration to all sensors and compare sequence-aligned results.
 5. Disable or corrupt one CS and verify only its bit clears, with `STALE_DATA` or `IMPLAUSIBLE_DATA`, while the other samples continue.
-6. Stop the 1.024 MHz clock and verify every sensor reports `STALE_DATA` and the platform health monitor reacts.
+6. Stop the 1.024 MHz clock and verify that every sensor reports `FROZEN_DATA` within nine reads (a clock that never ran gives `STALE_DATA` instead) and that the platform health monitor reacts.
 7. Stop the synchronization pulses and verify the platform timing monitor detects it; the sensors keep running on the last pulse.
 8. Confirm STATUS bits 7:5 read 0 and `DATA_RDY` clears on a STATUS read on the flight silicon (ADXL-INT-008).
 9. Exercise reset, reinitialization, and recovery without power cycling, and read the shadow registers after each reset.
 10. Run long enough to bound sequence gaps and `SkippedTriggers`.
 
-The TE0715 sensor bench (ZephyrOSTe0715 repository, `docs/tests/adxl355.md`) runs the manager and the synchronized application unchanged on a Zynq-7000 with Zephyr's SPI driver, against one ADXL355 on its internal clock, with a timing thread in place of the FPGA source. Its test cases cover steps 1, 2 (without the clock and synchronization signals), 6 (no external clock), 8 and 9 for one sensor, plus self test, temperature, six orientations and link faults. The external-synchronization, seven-sensor and flight-load steps stay open.
+The TE0715 sensor bench (ZephyrOSTe0715 repository, `docs/tests/adxl355.md`) runs the manager and the synchronized application unchanged on a Zynq-7000 with Zephyr's SPI driver, against one ADXL355 on its internal clock, with a timing thread in place of the FPGA source. Its test cases cover steps 1, 2 (without a capture of the clock and synchronization signals), 6, 7, 8 and 9 for one sensor, plus self test, temperature, six orientations and link faults. TC-22 (2026-10-02) runs the flight synchronization mode, with the 1.024 MHz clock and 4 kHz pulse of the cubespec-pl bitstream and the application triggered by its sync interrupt. It stops the clock both with a sample unread (`FROZEN_DATA`) and with the last sample read (`STALE_DATA`), and it stops the pulses. The seven-sensor, signal-capture and flight-load steps stay open.
 
 For calibrated science use, add sensor-specific scale, bias, axis alignment, temperature, and cross-axis acceptance tests above this transport library.
 
