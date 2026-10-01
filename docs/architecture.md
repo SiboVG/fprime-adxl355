@@ -79,11 +79,12 @@ The platform SPI driver reports transfer failures through `Drv.SpiWriteRead`, an
 
 | Condition | Evidence in the burst | Status |
 | --- | --- | --- |
-| No sample newer than the previous status read (stopped external clock, sensor not converting, read faster than ODR) | `DATA_RDY` clear; the data sheet clears it on every STATUS read and sets it only for newer data | `STALE_DATA` |
+| No sample newer than the previous status read (external clock that never ran, sensor not converting, read faster than ODR) | `DATA_RDY` clear; the data sheet clears it on every STATUS read and sets it only for newer data | `STALE_DATA` |
+| External clock stopped after running | `DATA_RDY` stays set, because the digital core that clears it runs on that clock, and the axes repeat exactly; reported once `FROZEN_REPEAT_LIMIT` (8) reads in a row repeat the read before | `FROZEN_DATA` |
 | Bytes that cannot come from an ADXL355 (floating or stuck-high MISO) | STATUS bits 7:5, documented to read 0, are set | `IMPLAUSIBLE_DATA` |
 | MISO stuck low or chip select not asserted | All bytes zero, so `DATA_RDY` is clear | `STALE_DATA` |
 
-With `EXT_SYNC = 01` and `EXT_CLK = 1`, the data sheet states that a missing external clock stops all data processing and the output reads as null values. Before this check, that condition produced frames full of zero acceleration marked valid. Loss of the synchronization pulse alone is not detectable here: the device keeps running synchronized to the last pulse it received, so the FPGA timing path must monitor the pulse train.
+With `EXT_SYNC = 01` and `EXT_CLK = 1`, the data sheet states that a missing external clock stops all data processing and the output reads as null values. Before this check, that condition produced frames full of zero acceleration marked valid. That holds for a clock that never ran. A clock that stops after running freezes the device instead: on the TE0715 bench, `DATA_RDY` stayed set through every STATUS read and the axis and temperature registers kept their last values. The repeat check catches that case. Until it trips, up to seven repeated samples still pass as `OK`, about 1.75 ms at 4 kHz. Measurement start restarts the count, and the device recovers without reinitialization once its clock returns. Loss of the synchronization pulse alone is not detectable here: the device keeps running synchronized to the last pulse it received, so the FPGA timing path must monitor the pulse train.
 
 Reading STATUS also clears `FIFO_OVR` and the activity bit. The default direct-read path never drains the stream-mode FIFO, so `FIFO_OVR` is expected to be set and is not treated as a fault; `StatusRegister` telemetry reports the last observed byte for diagnosis.
 

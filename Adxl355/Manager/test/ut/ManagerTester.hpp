@@ -21,6 +21,7 @@ class ManagerTester final : public ManagerGTestBase {
     void testHighRateFailuresAreEdgeReportedAndThrottled();
     void testReadBeforeInitializationIsRejected();
     void testImplausibleBusDataIsRejected();
+    void testStoppedClockIsReportedAsFrozenData();
     void testHighRateReadNeverWaitsForAControlOperation();
     void testFailedInitializationReportsConsistentLifecycle();
     void testTemperatureAndMeasurementControlPorts();

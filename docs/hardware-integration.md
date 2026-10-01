@@ -20,7 +20,7 @@ The implementation uses the constraints in `CS EM ACC Design Notes.docx` for the
 
 With the external clock enabled, `INT2` cannot also carry an interrupt (data sheet Table 14 notes the mapping is ignored). The library rejects configurations that map an interrupt to `INT2` while `EXT_CLK` is set. It also rejects `EXT_SYNC = 01` without `EXT_CLK`, which Table 14 marks as not recommended because the digital filters reset on every synchronization pulse.
 
-If the external clock is missing in this mode, the data sheet states that the device processes no data and the outputs read as null values. The library reports that as `STALE_DATA` for every sensor rather than as valid zero acceleration. If only the synchronization pulses stop, the sensors keep running synchronized to the last pulse, so the FPGA timing path must monitor the pulse train.
+If the external clock is missing in this mode, the data sheet states that the device processes no data and the outputs read as null values. The library reports that as `STALE_DATA` for every sensor rather than as valid zero acceleration. If the clock stops after it has run, the device freezes with `DATA_RDY` set and keeps returning its last sample. The library reports that as `FROZEN_DATA` after eight repeated reads (ADXL-DEV-013). If only the synchronization pulses stop, the sensors keep running synchronized to the last pulse, so the FPGA timing path must monitor the pulse train.
 
 ## Timing
 

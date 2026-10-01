@@ -22,7 +22,8 @@ enum class Status : std::uint8_t {
     BUSY,
     STALE_DATA,
     IMPLAUSIBLE_DATA,
-    NVM_MISMATCH
+    NVM_MISMATCH,
+    FROZEN_DATA
 };
 
 //! Device lifecycle; exactly one state holds at a time.
@@ -136,6 +137,9 @@ class Device {
   public:
     //! Software resets attempted before an NVM shadow mismatch is reported.
     static const std::uint8_t MAX_RESET_ATTEMPTS = 3U;
+    //! Acquisition reads in a row that repeat the X/Y/Z of the read before them,
+    //! with DATA_RDY set, after which readSample reports FROZEN_DATA.
+    static const std::uint8_t FROZEN_REPEAT_LIMIT = 8U;
 
     Device(SpiBus& spi, Delay& delay);
 
@@ -159,8 +163,10 @@ class Device {
 
     Status readStatus(StatusRegister& status);
     //! Status-checked sample: one STATUS..ZDATA1 burst. Rejects implausible
-    //! status bytes and reports STALE_DATA when no new sample is ready.
-    //! Reading STATUS clears its DATA_RDY, FIFO_OVR, and activity bits.
+    //! status bytes, reports STALE_DATA when no new sample is ready, and
+    //! FROZEN_DATA once FROZEN_REPEAT_LIMIT reads in a row have repeated the
+    //! sample before them. Reading STATUS clears its DATA_RDY, FIFO_OVR, and
+    //! activity bits while the device is clocked.
     Status readSample(Sample& sample);
     //! Diagnostic XYZ read without STATUS: no freshness check, no side effects.
     Status readRawSample(RawSample& sample);
@@ -195,6 +201,8 @@ class Device {
     Status enterStandbyForConfiguration(bool& resumeMeasurement);
     Status finishConfigurationChange(bool resumeMeasurement, Status operationStatus);
     void invalidate();
+    bool repeatsPreviousSample(const RawSample& raw);
+    void restartRepeatCount();
     std::uint8_t powerControlValue(bool standby) const;
     static std::int32_t decodeAcceleration(const std::uint8_t* bytes);
     static double sensitivityLsbPerG(Range range);
@@ -206,6 +214,8 @@ class Device {
     LifecycleState m_state;
     std::uint8_t m_selfTest;
     std::uint8_t m_lastStatus;
+    RawSample m_previousRaw;
+    std::uint8_t m_repeats;
     bool m_shadowCaptured;
     std::uint8_t m_shadowReference[5];
 };

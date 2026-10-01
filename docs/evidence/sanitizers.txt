@@ -1,16 +1,18 @@
 # Host tests under AddressSanitizer and UndefinedBehaviorSanitizer
-# Recorded 2026-09-29T21:33Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
 $ cmake -S tests -B build-san -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
 $ ASAN_OPTIONS=halt_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ctest --test-dir build-san --output-on-failure
+Internal ctest changing into directory: build-san
 Test project build-san
     Start 1: adxl355-unit-tests
-1/3 Test #1: adxl355-unit-tests ...............   Passed    0.02 sec
+1/3 Test #1: adxl355-unit-tests ...............   Passed    0.01 sec
     Start 2: adxl355-integration-tests
-2/3 Test #2: adxl355-integration-tests ........   Passed    0.02 sec
+2/3 Test #2: adxl355-integration-tests ........   Passed    0.00 sec
     Start 3: adxl355-gate-tests
-3/3 Test #3: adxl355-gate-tests ...............   Passed    0.06 sec
+3/3 Test #3: adxl355-gate-tests ...............   Passed    0.03 sec
 
 100% tests passed, 0 tests failed out of 3
 
-Total Test time (real) =   0.11 sec
+Total Test time (real) =   0.04 sec
+exit status: 0

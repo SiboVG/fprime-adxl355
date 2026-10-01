@@ -1,58 +1,60 @@
 # Generated F Prime component tests
-# Recorded 2026-09-29T21:33Z on Darwin arm64; Apple clang version 21.0.0 (clang-2100.3.34.2); F Prime 35d4c0e (v4.2.0-267); native fpp 3.3.0a12 and host cmake version 4.0.2 via tools/workspace/bootstrap-fprime-venv.sh; macOS SDK 27.0 with Command Line Tools ld-27037.1
+# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
-$ cmake -S tests/fprime-consumer -B build-components -DFPRIME_FRAMEWORK_PATH=<fprime 35d4c0e> && cmake --build build-components --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
+$ cmake -S tests/fprime-consumer -B build-components -G Ninja -DFPRIME_FRAMEWORK_PATH=<fprime 35d4c0e> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage && cmake --build build-components --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
 
-$ build-components/bin/Darwin/Adxl355_Manager_ut_exe
-[==========] Running 16 tests from 3 test suites.
+$ build-components/bin/Linux/Adxl355_Manager_ut_exe
+[==========] Running 17 tests from 3 test suites.
 [----------] Global test environment set-up.
 [----------] 4 tests from Nominal
 [ RUN      ] Nominal.ConfigureAndRead
-[       OK ] Nominal.ConfigureAndRead (3 ms)
+[       OK ] Nominal.ConfigureAndRead (2 ms)
 [ RUN      ] Nominal.ControlCommands
 [       OK ] Nominal.ControlCommands (2 ms)
 [ RUN      ] Nominal.TemperatureAndMeasurementControlPorts
 [       OK ] Nominal.TemperatureAndMeasurementControlPorts (1 ms)
 [ RUN      ] Nominal.SnapshotDoesNotConsumeDataReady
-[       OK ] Nominal.SnapshotDoesNotConsumeDataReady (2 ms)
-[----------] 4 tests from Nominal (9 ms total)
+[       OK ] Nominal.SnapshotDoesNotConsumeDataReady (1 ms)
+[----------] 4 tests from Nominal (8 ms total)
 
-[----------] 9 tests from OffNominal
+[----------] 10 tests from OffNominal
 [ RUN      ] OffNominal.CommandValidationErrorsAreNotDeviceFaults
-[       OK ] OffNominal.CommandValidationErrorsAreNotDeviceFaults (2 ms)
+[       OK ] OffNominal.CommandValidationErrorsAreNotDeviceFaults (1 ms)
 [ RUN      ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled
 [       OK ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled (2 ms)
 [ RUN      ] OffNominal.ReadBeforeInitializationIsRejected
 [       OK ] OffNominal.ReadBeforeInitializationIsRejected (0 ms)
 [ RUN      ] OffNominal.ImplausibleBusDataIsRejected
 [       OK ] OffNominal.ImplausibleBusDataIsRejected (1 ms)
+[ RUN      ] OffNominal.StoppedClockIsReportedAsFrozenData
+[       OK ] OffNominal.StoppedClockIsReportedAsFrozenData (1 ms)
 [ RUN      ] OffNominal.FailedInitializationReportsConsistentLifecycle
 [       OK ] OffNominal.FailedInitializationReportsConsistentLifecycle (1 ms)
 [ RUN      ] OffNominal.NvmMismatchIsReported
-[       OK ] OffNominal.NvmMismatchIsReported (5 ms)
+[       OK ] OffNominal.NvmMismatchIsReported (4 ms)
 [ RUN      ] OffNominal.FailedSelfTestInvalidatesTheDevice
 [       OK ] OffNominal.FailedSelfTestInvalidatesTheDevice (1 ms)
 [ RUN      ] OffNominal.DriverFailuresPropagateThroughTheSpiPort
 [       OK ] OffNominal.DriverFailuresPropagateThroughTheSpiPort (1 ms)
 [ RUN      ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped
-[       OK ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped (2 ms)
-[----------] 9 tests from OffNominal (20 ms total)
+[       OK ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped (1 ms)
+[----------] 10 tests from OffNominal (19 ms total)
 
 [----------] 3 tests from Concurrency
 [ RUN      ] Concurrency.HighRateReadNeverWaitsForAControlOperation
-[       OK ] Concurrency.HighRateReadNeverWaitsForAControlOperation (13 ms)
+[       OK ] Concurrency.HighRateReadNeverWaitsForAControlOperation (11 ms)
 [ RUN      ] Concurrency.EveryControlPathReportsBusyWithoutBlocking
-[       OK ] Concurrency.EveryControlPathReportsBusyWithoutBlocking (196 ms)
+[       OK ] Concurrency.EveryControlPathReportsBusyWithoutBlocking (162 ms)
 [ RUN      ] Concurrency.SchedInNeverWaitsForTheGate
-[       OK ] Concurrency.SchedInNeverWaitsForTheGate (4 ms)
-[----------] 3 tests from Concurrency (215 ms total)
+[       OK ] Concurrency.SchedInNeverWaitsForTheGate (1 ms)
+[----------] 3 tests from Concurrency (175 ms total)
 
 [----------] Global test environment tear-down
-[==========] 16 tests from 3 test suites ran. (245 ms total)
-[  PASSED  ] 16 tests.
+[==========] 17 tests from 3 test suites ran. (204 ms total)
+[  PASSED  ] 17 tests.
 exit status: 0
 
-$ build-components/bin/Darwin/Adxl355_Application_ut_exe
+$ build-components/bin/Linux/Adxl355_Application_ut_exe
 [==========] Running 14 tests from 3 test suites.
 [----------] Global test environment set-up.
 [----------] 5 tests from Nominal
@@ -66,7 +68,7 @@ $ build-components/bin/Darwin/Adxl355_Application_ut_exe
 [       OK ] Nominal.DisabledAcquisitionDoesNoWork (0 ms)
 [ RUN      ] Nominal.EnablingRestartsEdgeDetection
 [       OK ] Nominal.EnablingRestartsEdgeDetection (0 ms)
-[----------] 5 tests from Nominal (2 ms total)
+[----------] 5 tests from Nominal (3 ms total)
 
 [----------] 6 tests from OffNominal
 [ RUN      ] OffNominal.InitializeAllReportsPartialMask
@@ -87,12 +89,13 @@ $ build-components/bin/Darwin/Adxl355_Application_ut_exe
 [ RUN      ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap
 [       OK ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap (0 ms)
 [ RUN      ] Concurrency.CommandsDuringInitializationReportBusy
-[       OK ] Concurrency.CommandsDuringInitializationReportBusy (23 ms)
+[       OK ] Concurrency.CommandsDuringInitializationReportBusy (19 ms)
 [ RUN      ] Concurrency.SchedInPublishesWhileAFrameOwnsTheGate
 [       OK ] Concurrency.SchedInPublishesWhileAFrameOwnsTheGate (0 ms)
-[----------] 3 tests from Concurrency (24 ms total)
+[----------] 3 tests from Concurrency (20 ms total)
 
 [----------] Global test environment tear-down
-[==========] 14 tests from 3 test suites ran. (31 ms total)
+[==========] 14 tests from 3 test suites ran. (27 ms total)
 [  PASSED  ] 14 tests.
 exit status: 0
+

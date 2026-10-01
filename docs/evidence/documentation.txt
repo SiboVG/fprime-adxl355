@@ -1,9 +1,9 @@
 # Documentation contracts and strict site build
-# Recorded 2026-09-29T21:34Z on Darwin arm64
+# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS)
 
 $ python3 tests/DocumentationTests.py
 ----------------------------------------------------------------------
-Ran 20 tests in 0.010s
+Ran 20 tests in 0.005s
 OK
 
 $ python3 tests/check_evidence.py
@@ -12,5 +12,5 @@ evidence manifest matches 47 files
 $ mkdocs build --strict (mkdocs 1.6.1, mkdocs-material 9.7.1)
 INFO    -  Cleaning site directory
 INFO    -  Building documentation to directory: adxl-site
-INFO    -  Documentation built in 0.32 seconds
+INFO    -  Documentation built in 0.19 seconds
 exit status: 0

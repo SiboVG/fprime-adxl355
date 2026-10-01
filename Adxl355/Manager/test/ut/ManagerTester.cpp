@@ -211,6 +211,35 @@ void ManagerTester::testImplausibleBusDataIsRejected() {
     EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
 }
 
+void ManagerTester::testStoppedClockIsReportedAsFrozenData() {
+    this->initialize();
+    AccelerationSample sample;
+
+    // The external clock stops after a conversion: DATA_RDY stays set and every
+    // read returns the same axes, which pass until the repeat limit.
+    this->m_emulator.setRawSample(4, 5, 6);
+    this->m_emulator.clockStopped = true;
+    for (U32 read = 0U; read < Device::FROZEN_REPEAT_LIMIT; ++read) {
+        EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    }
+    EXPECT_EQ(DriverStatus::FROZEN_DATA, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(DriverStatus::FROZEN_DATA, this->invoke_to_readAcceleration(0, sample));
+    ASSERT_EVENTS_OperationFailed_SIZE(0);
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_EVENTS_OperationFailed_SIZE(1);
+    ASSERT_EVENTS_OperationFailed(0, Operation::READ_SAMPLE, DriverStatus::FROZEN_DATA);
+    ASSERT_TLM_LastStatus(0, DriverStatus::FROZEN_DATA);
+    ASSERT_TLM_Errors(0, 2U);
+
+    // The clock returns: the sensor recovers without reinitialization.
+    this->m_emulator.clockStopped = false;
+    this->m_emulator.setRawSample(7, 8, 9);
+    EXPECT_EQ(DriverStatus::OK, this->invoke_to_readAcceleration(0, sample));
+    EXPECT_EQ(7, sample.get_rawX());
+    this->invoke_to_schedIn(0, 0U);
+    ASSERT_TLM_LastStatus(this->tlmHistory_LastStatus->size() - 1U, DriverStatus::OK);
+}
+
 void ManagerTester::testHighRateReadNeverWaitsForAControlOperation() {
     this->initialize();
     this->m_emulator.setRawSample(5, 5, 5);

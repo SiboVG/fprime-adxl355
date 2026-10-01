@@ -26,6 +26,9 @@ static const std::size_t TEMPERATURE_READ_ATTEMPTS = 3U;
 // operating range (-40 to +125 C) would reject real readings near its edges.
 static const double MIN_PLAUSIBLE_CELSIUS = -55.0;
 static const double MAX_PLAUSIBLE_CELSIUS = 150.0;
+// No decoded 20-bit axis value equals this, so the first read after a start
+// never counts as a repeat.
+static const std::int32_t NO_PREVIOUS_SAMPLE = -0x7FFFFFFF - 1;
 // Transfers of at most this many data bytes use a small stack frame, so the
 // 4 kHz path does not clear FIFO-sized buffers on every read.
 static const std::size_t SMALL_TRANSFER = 16U;
@@ -117,8 +120,12 @@ Device::Device(SpiBus& spi, Delay& delay)
       m_state(LifecycleState::UNCONFIGURED),
       m_selfTest(0U),
       m_lastStatus(0U),
+      m_previousRaw(),
+      m_repeats(0U),
       m_shadowCaptured(false),
-      m_shadowReference() {}
+      m_shadowReference() {
+    this->restartRepeatCount();
+}
 
 Status Device::initialize(const Configuration& configuration) {
     Status status = this->validateConfiguration(configuration);
@@ -334,6 +341,7 @@ Status Device::startMeasurement() {
         return status;
     }
     this->m_state = LifecycleState::MEASURING;
+    this->restartRepeatCount();
     return Status::OK;
 }
 
@@ -597,7 +605,7 @@ Status Device::readSample(Sample& sample) {
     }
     // DATA_RDY clears on every STATUS read and sets again only for newer data,
     // so a clear bit means these axis bytes were already delivered or the
-    // device is not converting (for example, a missing external clock).
+    // device is not converting (for example, an external clock that never ran).
     if ((statusValue & Registers::STATUS_DATA_READY) == 0U) {
         return Status::STALE_DATA;
     }
@@ -605,6 +613,13 @@ Status Device::readSample(Sample& sample) {
     raw.x = Device::decodeAcceleration(&bytes[STATUS_BURST_AXIS_OFFSET]);
     raw.y = Device::decodeAcceleration(&bytes[STATUS_BURST_AXIS_OFFSET + 3U]);
     raw.z = Device::decodeAcceleration(&bytes[STATUS_BURST_AXIS_OFFSET + 6U]);
+    // The digital core runs on the external clock. A clock that stops after
+    // running leaves DATA_RDY set, STATUS reads no longer clear it, and the axis
+    // registers keep the last sample (TE0715 bench, 2026-10-02), so a set bit
+    // alone does not prove a new sample.
+    if (this->repeatsPreviousSample(raw)) {
+        return Status::FROZEN_DATA;
+    }
     this->scale(raw, sample);
     return Status::OK;
 }
@@ -815,6 +830,30 @@ Status Device::finishConfigurationChange(bool resumeMeasurement, Status operatio
 
 void Device::invalidate() {
     this->m_state = LifecycleState::UNCONFIGURED;
+}
+
+bool Device::repeatsPreviousSample(const RawSample& raw) {
+    // Noise makes an exact repeat of all three 20-bit axes rare (about 1e-7 per
+    // read at 4 kHz and +/-2 g), so FROZEN_REPEAT_LIMIT repeats in a row stay
+    // improbable even at 3.906 Hz and +/-8 g, where the noise is about 1.5 LSB.
+    const bool repeat = (raw.x == this->m_previousRaw.x) && (raw.y == this->m_previousRaw.y) &&
+                        (raw.z == this->m_previousRaw.z);
+    this->m_previousRaw = raw;
+    if (!repeat) {
+        this->m_repeats = 0U;
+        return false;
+    }
+    if (this->m_repeats < FROZEN_REPEAT_LIMIT) {
+        ++this->m_repeats;
+    }
+    return this->m_repeats >= FROZEN_REPEAT_LIMIT;
+}
+
+void Device::restartRepeatCount() {
+    this->m_previousRaw.x = NO_PREVIOUS_SAMPLE;
+    this->m_previousRaw.y = NO_PREVIOUS_SAMPLE;
+    this->m_previousRaw.z = NO_PREVIOUS_SAMPLE;
+    this->m_repeats = 0U;
 }
 
 std::uint8_t Device::powerControlValue(bool standby) const {

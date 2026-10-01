@@ -24,6 +24,9 @@ module Adxl355 {
     IMPLAUSIBLE_DATA = 14
     @ Factory trim shadow registers differ after every allowed software reset
     NVM_MISMATCH = 15
+    @ DATA_RDY set, but X/Y/Z repeated for Device::FROZEN_REPEAT_LIMIT reads in a
+    @ row: the device stopped converting (for example, an external clock that stopped)
+    FROZEN_DATA = 16
   }
 
   enum SensorRange {
