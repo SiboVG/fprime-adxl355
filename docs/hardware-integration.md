@@ -41,14 +41,16 @@ The board design notes recommend gating the distributed SCLK so idle clock activ
 
 ## Recommended startup order
 
-1. Keep application acquisition disabled and hold back synchronization pulses.
-2. Start and stabilize the 1.024 MHz external clock.
-3. Configure all SPI endpoints for mode 0 and no more than 10 MHz.
-4. Run `INITIALIZE_ALL`; require initialized mask `0x7F` for a nominal start.
+1. Keep application acquisition disabled, and hold the 1.024 MHz clock and the synchronization pulses low.
+2. Configure all SPI endpoints for mode 0 and no more than 10 MHz.
+3. Run `INITIALIZE_ALL`; require initialized mask `0x7F` for a nominal start. Until it has written the `SYNC` register, and again from the software reset it starts with, `INT2` and `DRDY` are outputs, so nothing may drive them yet. Initialization does not need the external clock.
+4. Start and stabilize the 1.024 MHz external clock.
 5. Start the 4 kHz synchronization pulse train.
 6. Wait at least one filter group delay (a few frame periods). The data sheet notes that one to three samples after the first synchronization pulse can be lost or corrupted.
 7. Enable frame acquisition.
 8. Check the first frames for sequence continuity, `validMask == 0x7F`, `SkippedTriggers == 0`, and sensible temperature. `FIFO_OVR` in `StatusRegister` is expected because the direct-read path does not drain the stream-mode FIFO.
+
+For a reinitialization, disable acquisition and stop the pulses and the clock (both low) first, then repeat from step 3.
 
 ## Software reset and NVM trim
 
