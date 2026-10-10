@@ -16,7 +16,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "docs/evidence/source-sha256.json"
 TRACKED_DIRECTORIES = ("Adxl355", "examples", "tests")
-TRACKED_FILES = ("library.cmake", ".clang-tidy", ".github/workflows/adxl355.yml")
+TRACKED_FILES = (
+    "library.cmake",
+    ".clang-tidy",
+    "static-analysis.toml",
+    "scripts/static_analysis.py",
+    "scripts/install-cppcheck.sh",
+    "scripts/clang-tidy",
+    ".github/workflows/adxl355.yml",
+)
 SUFFIXES = {".cpp", ".hpp", ".fpp", ".txt", ".cmake", ".py", ".ini", ".yml"}
 
 

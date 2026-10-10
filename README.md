@@ -61,8 +61,9 @@ host unit/integration tests, documentation contracts, the evidence-manifest
 check, and a strict MkDocs site. Independent jobs run address/undefined-behavior
 sanitizers, enforce line and branch coverage gates on the portable core, and run
 the generated F Prime component tests against that F Prime revision with a component
-line-coverage gate. `clang-tidy` runs with warnings treated as errors on both the
-core and the component sources. Executed results are retained in `docs/evidence/`
+line-coverage gate. A zero-finding static-analysis gate (cppcheck 2.22.0 and
+clang-tidy 22.1.8, `python3 scripts/static_analysis.py`; see the testing page)
+covers every production source in both the host and the F Prime builds. Executed results are retained in `docs/evidence/`
 and pinned to the exact sources. Before the move to F Prime `35d4c0e`, the first remote workflow run to pass every job was
 [run 36331079661](https://github.com/SiboVG/fprime-adxl355/actions/runs/36331079661) on commit `354b404`.
 

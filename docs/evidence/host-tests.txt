@@ -1,5 +1,5 @@
 # Host unit, integration, and gate tests
-# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
+# Recorded 2026-10-09T23:37Z on Linux aarch64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
 $ cmake -S tests -B build-host -G Ninja && cmake --build build-host
 (build completed with -Wall -Wextra -Werror; no warnings)
@@ -84,4 +84,3 @@ $ build-host/adxl355-gate-tests
 [PASS] ReportQueueHandsEveryRecordAcrossThreadsInOrder
 7/7 tests passed
 exit status: 0
-

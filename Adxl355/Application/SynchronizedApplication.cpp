@@ -8,8 +8,8 @@ namespace Adxl355 {
 // Counters shared with REPORT must not hide a lock on the acquisition path.
 static_assert(ATOMIC_BOOL_LOCK_FREE == 2, "acquisition flags require lock-free atomics");
 static_assert(ATOMIC_CHAR_LOCK_FREE == 2, "acquisition masks require lock-free atomics");
-static_assert((ATOMIC_LLONG_LOCK_FREE == 2) && (ATOMIC_LONG_LOCK_FREE == 2),
-              "64-bit acquisition counters require lock-free atomics");
+static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "64-bit acquisition counters require lock-free atomics");
+static_assert(ATOMIC_LONG_LOCK_FREE == 2, "64-bit acquisition counters require lock-free atomics");
 
 namespace {
 

@@ -22,7 +22,7 @@ class Manager final : public ManagerComponentBase {
     static const std::size_t HIGH_RATE_REPORT_CAPACITY = 16U;
 
     explicit Manager(const char* const componentName);
-    ~Manager();
+    ~Manager() override;
 
   private:
     class PortSpiBus final : public SpiBus {
@@ -78,13 +78,13 @@ class Manager final : public ManagerComponentBase {
     void READ_SNAPSHOT_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
     void CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSequence) override;
 
-    bool acquireForControl(Operation operation);
-    void runControl(FwOpcodeType opCode, U32 commandSequence, Operation operation, Status status);
+    bool acquireForControl(const Operation& operation);
+    void runControl(FwOpcodeType opCode, U32 commandSequence, const Operation& operation, Status status);
     Status initializeDevice(const Configuration& configuration);
     static DriverStatus toFppStatus(Status status);
     static Configuration toCoreConfiguration(const DeviceConfiguration& configuration);
     static bool isOperatorError(Status status);
-    void recordStatus(Operation operation, Status status);
+    void recordStatus(const Operation& operation, Status status);
     void recordHighRateStatus(Status status);
     void respond(FwOpcodeType opCode, U32 commandSequence, Status status);
     void publishLifecycle();

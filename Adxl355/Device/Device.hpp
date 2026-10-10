@@ -146,7 +146,7 @@ class Device {
     //! Identify, reset with NVM-load check, program, verify, and start measurement.
     //! All or nothing: any failure after the reset is issued leaves UNCONFIGURED.
     Status initialize(const Configuration& configuration);
-    Status readIdentity(Identity& identity);
+    Status readIdentity(Identity& deviceIdentity);
     Status softReset();
     Status startMeasurement();
     Status stopMeasurement();
@@ -191,7 +191,7 @@ class Device {
     std::uint8_t lastStatusRegister() const;
 
   private:
-    Status validateConfiguration(const Configuration& configuration) const;
+    static Status validateConfiguration(const Configuration& configuration);
     Status programConfiguration(const Configuration& configuration);
     Status resetOnce();
     Status captureShadowReference();

@@ -79,17 +79,45 @@ The workflow job `fprime-components` checks out F Prime at the tested revision, 
 
 ## Static analysis
 
-`clang-tidy` runs the `clang-analyzer-*` checks with warnings as errors (`.clang-tidy`). Use the host build's compilation database for the portable core and the F Prime consumer build's for the components:
+Static analysis is a zero-finding gate: cppcheck and clang-tidy must report nothing on any production translation unit. It is the CubeSpec workspace gate; the reference is `tools/static-analysis/` in the flight-software workspace. `scripts/static_analysis.py`, `scripts/install-cppcheck.sh`, `scripts/clang-tidy` and `.clang-tidy` are byte-identical copies of it (only `HeaderFilterRegex` in `.clang-tidy` is set for this repository). `static-analysis.toml` is specific to this repository.
+
+| Tool | Pinned version | Rule set |
+| --- | --- | --- |
+| cppcheck | 2.22.0 | `--enable=warning,style,performance,portability`, `--library=posix`, `--check-level=exhaustive` (in `scripts/static_analysis.py`) |
+| clang-tidy | LLVM 22.1.8 (PyPI wheel) | `clang-analyzer-*`, `bugprone-*`, `cert-*`, `misc-*`, `performance-*`, `portability-*`, every warning an error, minus the exclusions justified in `.clang-tidy` |
+
+`static-analysis.toml` defines two builds. The runner filters each build's `compile_commands.json` to the production sources (`Adxl355/**` except `Adxl355/*/test/**` and generated `*Ac.cpp`) and runs both tools on exactly those files:
+
+- `host`: the portable core (`Device`, `AccessGate`, `SynchronizedArray`) from the plain C++11 host build in `tests/` (`build-static`).
+- `components`: every module in the standalone F Prime consumer (`tests/fprime-consumer`, `build-components`): the core again (now with `ADXL355_USE_FW_ASSERT`), plus `Platform`, `Manager` and `Application`. Its configure step also builds the production module targets, because clang-tidy needs the generated `*Ac.hpp` headers.
+
+Test code (`tests/`, `Adxl355/*/test/`) is verified by execution and is not analysed. `examples/` holds only FPP topology fragments. F Prime and generated headers are not analysed. clang-tidy reports only headers under `Adxl355/` and skips generated headers. The runner counts cppcheck findings only in first-party files, except preprocessor and parse-integrity errors (such as `#error`), which fail the gate wherever they occur, because cppcheck could not analyse that translation unit. `static-analysis.toml` therefore predefines `__GNUC__` and `__SIZEOF_POINTER__` for cppcheck, which F Prime's headers require.
+
+Run the gate from the repository root:
 
 ```sh
-cmake -S tests -B build-static -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-clang-tidy --warnings-as-errors='*' -p build-static \
-  Adxl355/Device/Device.cpp Adxl355/Device/AccessGate.cpp Adxl355/Array/SynchronizedArray.cpp
-clang-tidy --warnings-as-errors='*' -p /tmp/adxl355-components \
-  Adxl355/Manager/Manager.cpp Adxl355/Application/SynchronizedApplication.cpp Adxl355/Platform/OsDelay.cpp
+# Prerequisites: cppcheck 2.22.0 (brew install cppcheck, or scripts/install-cppcheck.sh)
+# and uv, whose uvx runs the pinned clang-tidy wheel.
+. .venv-fprime/bin/activate                       # F Prime 35d4c0e tool chain (see above)
+export FPRIME_FRAMEWORK_PATH=/absolute/path/to/fprime
+python3 scripts/static_analysis.py                # both builds, zero findings required
+python3 scripts/static_analysis.py --build host   # portable core only; no F Prime needed
+python3 scripts/static_analysis.py --no-configure # reuse existing compilation databases
+python3 scripts/static_analysis.py --report docs/evidence/static-analysis.txt
 ```
 
-Use a `clang-tidy` at least as new as the platform SDK (on macOS, a current Homebrew `llvm`). An older one fails while parsing system headers: Homebrew LLVM 18, for example, cannot parse the macOS 27 SDK even when pointed at its own libc++. Linux CI uses the distribution's `clang-tidy`.
+Both builds run on macOS and Linux (`local_builds`). Locally, a tool version other than the pinned one only produces a warning. In CI (`CI=true`) it fails the gate. The `static-analysis` workflow job runs the `host` build. The `fprime-components` job runs the `components` build after the component tests. Both install the pinned cppcheck (cached) and `pipx install clang-tidy==22.1.8`.
+
+**Editor.** `.vscode/settings.json` points the VS Code C/C++ extension (ms-vscode.cpptools) at `build-components/compile_commands.json` and at the pinned clang-tidy (`scripts/clang-tidy`). clang-tidy findings therefore appear while editing, with the same `.clang-tidy` as the gate. Configure `build-components` once, for example by running the gate. cpptools cannot run cppcheck. For the full gate, run the VS Code task "Static analysis (cppcheck + clang-tidy)" (`.vscode/tasks.json`), which reports its findings in the Problems panel.
+
+**Suppressions.** Fix findings in the code. A suppression is allowed only inline, on the finding's line or the line before it, naming the check and giving a reason:
+
+```cpp
+// NOLINTNEXTLINE(check-id): reason
+// cppcheck-suppress checkId ; reason
+```
+
+File-level, directory-level and command-line suppressions of first-party code are not allowed. The production sources currently carry no suppressions. If a finding reveals a real defect whose fix changes behavior, record it and fix it as a reviewed behavior change; never suppress it.
 
 ## Documentation tests
 

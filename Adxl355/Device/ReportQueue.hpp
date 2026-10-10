@@ -8,8 +8,8 @@
 namespace Adxl355 {
 
 // A queue that silently fell back to a lock would block the acquisition path.
-static_assert((ATOMIC_INT_LOCK_FREE == 2) && (ATOMIC_LONG_LOCK_FREE == 2),
-              "ReportQueue requires lock-free integer atomics");
+static_assert(ATOMIC_INT_LOCK_FREE == 2, "ReportQueue requires lock-free integer atomics");
+static_assert(ATOMIC_LONG_LOCK_FREE == 2, "ReportQueue requires lock-free integer atomics");
 
 //! Fixed-capacity queue from one producer to one consumer that never waits and
 //! never allocates. The acquisition path records fault edges here instead of

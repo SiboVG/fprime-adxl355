@@ -15,8 +15,8 @@ Use the documentation in this order:
 The Raspberry Pi example is a functional transport and sensor bring-up path. Linux userspace is not the timing authority for the final 4 kHz synchronized flight acquisition path.
 
 The automated workflow separately gates host tests, sanitizers, core and
-component coverage, the generated F Prime component tests, `clang-tidy`,
-documentation contracts, the evidence manifest, and a strict site render. Local
+component coverage, the generated F Prime component tests, static analysis
+(cppcheck and `clang-tidy`, zero findings), documentation contracts, the evidence manifest, and a strict site render. Local
 results are retained in `docs/evidence/`. Physical Raspberry Pi execution,
 synchronized multi-sensor waveforms, flight-target timing, and fault injection
 remain HIL work rather than automated evidence.

@@ -25,7 +25,7 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
     static const std::size_t FRAME_REPORT_CAPACITY = 16U;
 
     explicit SynchronizedApplication(const char* const componentName);
-    ~SynchronizedApplication();
+    ~SynchronizedApplication() override;
 
     //! Topology-time sensor count (1 through MAX_SENSORS); acquisition must be disabled.
     DriverStatus configure(U8 sensorCount);
@@ -34,6 +34,10 @@ class SynchronizedApplication final : public SynchronizedApplicationComponentBas
     //! A partial frame whose valid mask differs from the previous frame's, or
     //! the first complete frame after partial ones.
     struct FrameReport {
+        FrameReport() : sequence(0U), validMask(0U), recovered(false) {}
+        FrameReport(U64 frameSequence, U8 frameValidMask, bool frameRecovered)
+            : sequence(frameSequence), validMask(frameValidMask), recovered(frameRecovered) {}
+
         U64 sequence;
         U8 validMask;
         bool recovered;

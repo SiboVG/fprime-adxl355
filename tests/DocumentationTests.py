@@ -263,10 +263,10 @@ class DocumentationTests(unittest.TestCase):
             "ADXL355_ENABLE_COVERAGE=ON",
             "--fail-under-line",
             "--fail-under-branch",
-            "clang-tidy",
-            "--warnings-as-errors=*",
-            "Adxl355/Manager/Manager.cpp",
-            "Adxl355/Application/SynchronizedApplication.cpp",
+            "clang-tidy==22.1.8",
+            "scripts/install-cppcheck.sh",
+            "scripts/static_analysis.py --build host",
+            "scripts/static_analysis.py --build components",
             "mkdocs build --strict",
             "check_evidence.py",
         ):
@@ -276,6 +276,26 @@ class DocumentationTests(unittest.TestCase):
         host_cmake = (LIBRARY_ROOT / "tests/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("option(ADXL355_ENABLE_COVERAGE", host_cmake)
         self.assertTrue((LIBRARY_ROOT / ".clang-tidy").is_file())
+        self.assertTrue((LIBRARY_ROOT / "scripts/static_analysis.py").is_file())
+
+    def test_static_analysis_covers_every_production_module(self) -> None:
+        import tomllib
+
+        config = tomllib.loads((LIBRARY_ROOT / "static-analysis.toml").read_text(encoding="utf-8"))
+        builds = {build["name"]: build for build in config["build"]}
+        self.assertEqual({"host", "components"}, set(builds))
+        self.assertEqual(["host", "components"], config["local_builds"])
+        for build in builds.values():
+            with self.subTest(build=build["name"]):
+                self.assertEqual(["Adxl355/**"], build["include"])
+                self.assertEqual(["Adxl355/*/test/**"], build["exclude"])
+        # The components build compiles every module, so it must see every
+        # production source file under Adxl355/.
+        configure = " ".join(builds["components"]["configure"])
+        self.assertIn("tests/fprime-consumer", configure)
+        for module in ("Adxl355_Manager", "Adxl355_Application", "Adxl355_Array"):
+            with self.subTest(module=module):
+                self.assertIn(module, configure)
 
     def test_generated_component_tests_run_in_ci_with_a_coverage_gate(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github/workflows/adxl355.yml").read_text(encoding="utf-8")

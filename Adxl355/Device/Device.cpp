@@ -128,13 +128,13 @@ Device::Device(SpiBus& spi, Delay& delay)
 }
 
 Status Device::initialize(const Configuration& configuration) {
-    Status status = this->validateConfiguration(configuration);
+    Status status = Device::validateConfiguration(configuration);
     if (status != Status::OK) {
         return status;
     }
 
-    Identity identity;
-    status = this->readIdentity(identity);
+    Identity readBack;
+    status = this->readIdentity(readBack);
     if (status != Status::OK) {
         return status;
     }
@@ -152,23 +152,23 @@ Status Device::initialize(const Configuration& configuration) {
         this->invalidate();
         return status;
     }
-    this->m_identity = identity;
+    this->m_identity = readBack;
     return Status::OK;
 }
 
-Status Device::readIdentity(Identity& identity) {
+Status Device::readIdentity(Identity& deviceIdentity) {
     std::uint8_t values[IDENTITY_LENGTH] = {0U, 0U, 0U, 0U};
     const Status status = this->readRegister(Registers::DEVID_AD, values, IDENTITY_LENGTH);
     if (status != Status::OK) {
         return status;
     }
-    identity.analogDevicesId = values[0];
-    identity.memsId = values[1];
-    identity.partId = values[2];
-    identity.revisionId = values[3];
-    if ((identity.analogDevicesId != Registers::EXPECTED_DEVID_AD) ||
-        (identity.memsId != Registers::EXPECTED_DEVID_MST) ||
-        (identity.partId != Registers::EXPECTED_PARTID)) {
+    deviceIdentity.analogDevicesId = values[0];
+    deviceIdentity.memsId = values[1];
+    deviceIdentity.partId = values[2];
+    deviceIdentity.revisionId = values[3];
+    if ((deviceIdentity.analogDevicesId != Registers::EXPECTED_DEVID_AD) ||
+        (deviceIdentity.memsId != Registers::EXPECTED_DEVID_MST) ||
+        (deviceIdentity.partId != Registers::EXPECTED_PARTID)) {
         return Status::IDENTITY_MISMATCH;
     }
     return Status::OK;
@@ -214,9 +214,9 @@ Status Device::resetOnce() {
     this->m_delay.delayMilliseconds(1U);
     for (std::size_t attempt = 0U; attempt < NVM_POLL_ATTEMPTS; ++attempt) {
         StatusRegister deviceStatus;
-        const Status readStatus = this->readStatus(deviceStatus);
-        if (readStatus != Status::OK) {
-            return readStatus;
+        const Status pollStatus = this->readStatus(deviceStatus);
+        if (pollStatus != Status::OK) {
+            return pollStatus;
         }
         if (!deviceStatus.nvmBusy) {
             return Status::OK;
@@ -781,7 +781,7 @@ std::uint8_t Device::lastStatusRegister() const {
     return this->m_lastStatus;
 }
 
-Status Device::validateConfiguration(const Configuration& configuration) const {
+Status Device::validateConfiguration(const Configuration& configuration) {
     const std::uint8_t rangeValue = static_cast<std::uint8_t>(configuration.range);
     const std::uint8_t odrValue = static_cast<std::uint8_t>(configuration.outputDataRate);
     const std::uint8_t hpfValue = static_cast<std::uint8_t>(configuration.highPassCorner);

@@ -7,8 +7,8 @@ namespace Adxl355 {
 
 // schedIn reads these without the gate; a hidden lock would block the 4 kHz path.
 static_assert(ATOMIC_CHAR_LOCK_FREE == 2, "the published status requires a lock-free atomic");
-static_assert((ATOMIC_LLONG_LOCK_FREE == 2) && (ATOMIC_LONG_LOCK_FREE == 2),
-              "the error counter requires lock-free 64-bit atomics");
+static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "the error counter requires lock-free 64-bit atomics");
+static_assert(ATOMIC_LONG_LOCK_FREE == 2, "the error counter requires lock-free 64-bit atomics");
 
 Manager::PortSpiBus::PortSpiBus(Manager& owner) : m_owner(owner) {}
 
@@ -325,7 +325,7 @@ void Manager::CLEAR_EVENT_THROTTLE_cmdHandler(FwOpcodeType opCode, U32 commandSe
     this->cmdResponse_out(opCode, commandSequence, Fw::CmdResponse::OK);
 }
 
-bool Manager::acquireForControl(Operation operation) {
+bool Manager::acquireForControl(const Operation& operation) {
     if (this->m_gate.acquire(this->m_delay, CONTROL_ACQUIRE_ATTEMPTS)) {
         return true;
     }
@@ -335,7 +335,7 @@ bool Manager::acquireForControl(Operation operation) {
     return false;
 }
 
-void Manager::runControl(FwOpcodeType opCode, U32 commandSequence, Operation operation, Status status) {
+void Manager::runControl(FwOpcodeType opCode, U32 commandSequence, const Operation& operation, Status status) {
     this->recordStatus(operation, status);
     this->publishLifecycle();
     this->respond(opCode, commandSequence, status);
@@ -420,7 +420,7 @@ bool Manager::isOperatorError(Status status) {
            (status == Status::INVALID_STATE);
 }
 
-void Manager::recordStatus(Operation operation, Status status) {
+void Manager::recordStatus(const Operation& operation, Status status) {
     const DriverStatus fppStatus = Manager::toFppStatus(status);
     this->tlmWrite_LastStatus(fppStatus);
     if ((status == Status::OK) || Manager::isOperatorError(status)) {

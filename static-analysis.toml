@@ -1,0 +1,59 @@
+# CubeSpec static-analysis gate (cppcheck + clang-tidy); run with
+#   python3 scripts/static_analysis.py
+# scripts/static_analysis.py, scripts/install-cppcheck.sh, scripts/clang-tidy
+# and .clang-tidy are vendored byte-identical from the workspace reference
+# (tools/static-analysis/); only this file is repository specific.
+#
+# Only first-party production code is analysed: every C++ source under
+# Adxl355/. Test code (tests/ and Adxl355/*/test/) is verified by execution,
+# F Prime autocode (*Ac.cpp, *Ac.hpp) and the F Prime framework are not
+# analysed, and examples/ holds only FPP topology fragments (no C/C++).
+
+# Both builds run on macOS and Linux. "components" needs the F Prime 35d4c0e
+# tool venv and checkout (docs/testing.md); see its configure step for defaults.
+local_builds = ["host", "components"]
+
+# Portable core with the plain host compiler (C++11, no F Prime): Device,
+# AccessGate and SynchronizedArray, with the core's own assertion handler.
+[[build]]
+name = "host"
+dir = "build-static"
+configure = ["cmake", "-S", "tests", "-B", "build-static", "-G", "Ninja",
+             "-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]
+include = ["Adxl355/**"]
+exclude = ["Adxl355/*/test/**"]
+
+# The standalone F Prime consumer (tests/fprime-consumer), as CI's
+# fprime-components job builds it: every module under Adxl355/ (Device with
+# ADXL355_USE_FW_ASSERT, Array, Platform, Manager, Application). clang-tidy
+# needs the generated *Ac.hpp headers, so the configure step also builds the
+# production module targets (not the unit tests).
+[[build]]
+name = "components"
+dir = "build-components"
+# Without an active F Prime venv or FPRIME_FRAMEWORK_PATH (e.g. from the
+# pre-push hook), it uses the repository's .venv-fprime (or build-venv-fprime)
+# and the CubeSpec workspace checkout ../../third-party/upstream/fprime.
+configure = ["sh", "-c", """
+set -e
+if [ -z "${VIRTUAL_ENV:-}" ]; then
+    for venv in .venv-fprime build-venv-fprime; do
+        if [ -f "$venv/bin/activate" ]; then . "$venv/bin/activate"; break; fi
+    done
+fi
+fprime=${FPRIME_FRAMEWORK_PATH:-$PWD/../../third-party/upstream/fprime}
+cmake -S tests/fprime-consumer -B build-components -G Ninja \
+    -DFPRIME_FRAMEWORK_PATH="$fprime" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build-components --target Adxl355_Manager Adxl355_Application Adxl355_Array
+"""]
+include = ["Adxl355/**"]
+exclude = ["Adxl355/*/test/**"]
+# cppcheck predefines no compiler macros. F Prime stops with #error unless
+# __GNUC__ (Fw/Types/BasicTypes.h; GCC and Clang both define it) and
+# __SIZEOF_POINTER__ (the unix Platform/PlatformTypes.h) are set; without them
+# cppcheck cannot analyse any F Prime translation unit. Both CI and macOS hosts
+# are 64-bit.
+cppcheck_args = ["-D__GNUC__", "-D__SIZEOF_POINTER__=8"]
+# CI checks F Prime out inside the repository (fprime/). Its ordinary findings
+# are not counted; integrity errors (#error, parse failures) still are.
+suppress_paths = ["fprime/*"]

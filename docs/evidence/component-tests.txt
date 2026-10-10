@@ -1,5 +1,5 @@
 # Generated F Prime component tests
-# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
+# Recorded 2026-10-09T23:37Z on Linux aarch64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
 $ cmake -S tests/fprime-consumer -B build-components -G Ninja -DFPRIME_FRAMEWORK_PATH=<fprime 35d4c0e> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage && cmake --build build-components --target Adxl355_Manager_ut_exe Adxl355_Application_ut_exe
 
@@ -8,49 +8,49 @@ $ build-components/bin/Linux/Adxl355_Manager_ut_exe
 [----------] Global test environment set-up.
 [----------] 4 tests from Nominal
 [ RUN      ] Nominal.ConfigureAndRead
-[       OK ] Nominal.ConfigureAndRead (2 ms)
+[       OK ] Nominal.ConfigureAndRead (5 ms)
 [ RUN      ] Nominal.ControlCommands
-[       OK ] Nominal.ControlCommands (2 ms)
+[       OK ] Nominal.ControlCommands (5 ms)
 [ RUN      ] Nominal.TemperatureAndMeasurementControlPorts
-[       OK ] Nominal.TemperatureAndMeasurementControlPorts (1 ms)
+[       OK ] Nominal.TemperatureAndMeasurementControlPorts (2 ms)
 [ RUN      ] Nominal.SnapshotDoesNotConsumeDataReady
-[       OK ] Nominal.SnapshotDoesNotConsumeDataReady (1 ms)
-[----------] 4 tests from Nominal (8 ms total)
+[       OK ] Nominal.SnapshotDoesNotConsumeDataReady (2 ms)
+[----------] 4 tests from Nominal (17 ms total)
 
 [----------] 10 tests from OffNominal
 [ RUN      ] OffNominal.CommandValidationErrorsAreNotDeviceFaults
-[       OK ] OffNominal.CommandValidationErrorsAreNotDeviceFaults (1 ms)
+[       OK ] OffNominal.CommandValidationErrorsAreNotDeviceFaults (4 ms)
 [ RUN      ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled
-[       OK ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled (2 ms)
+[       OK ] OffNominal.HighRateFailuresAreEdgeReportedAndThrottled (5 ms)
 [ RUN      ] OffNominal.ReadBeforeInitializationIsRejected
-[       OK ] OffNominal.ReadBeforeInitializationIsRejected (0 ms)
+[       OK ] OffNominal.ReadBeforeInitializationIsRejected (2 ms)
 [ RUN      ] OffNominal.ImplausibleBusDataIsRejected
-[       OK ] OffNominal.ImplausibleBusDataIsRejected (1 ms)
+[       OK ] OffNominal.ImplausibleBusDataIsRejected (4 ms)
 [ RUN      ] OffNominal.StoppedClockIsReportedAsFrozenData
-[       OK ] OffNominal.StoppedClockIsReportedAsFrozenData (1 ms)
+[       OK ] OffNominal.StoppedClockIsReportedAsFrozenData (4 ms)
 [ RUN      ] OffNominal.FailedInitializationReportsConsistentLifecycle
-[       OK ] OffNominal.FailedInitializationReportsConsistentLifecycle (1 ms)
+[       OK ] OffNominal.FailedInitializationReportsConsistentLifecycle (6 ms)
 [ RUN      ] OffNominal.NvmMismatchIsReported
-[       OK ] OffNominal.NvmMismatchIsReported (4 ms)
+[       OK ] OffNominal.NvmMismatchIsReported (7 ms)
 [ RUN      ] OffNominal.FailedSelfTestInvalidatesTheDevice
-[       OK ] OffNominal.FailedSelfTestInvalidatesTheDevice (1 ms)
+[       OK ] OffNominal.FailedSelfTestInvalidatesTheDevice (4 ms)
 [ RUN      ] OffNominal.DriverFailuresPropagateThroughTheSpiPort
-[       OK ] OffNominal.DriverFailuresPropagateThroughTheSpiPort (1 ms)
+[       OK ] OffNominal.DriverFailuresPropagateThroughTheSpiPort (3 ms)
 [ RUN      ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped
-[       OK ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped (1 ms)
-[----------] 10 tests from OffNominal (19 ms total)
+[       OK ] OffNominal.HighRateEdgesBeyondTheQueueAreDropped (4 ms)
+[----------] 10 tests from OffNominal (51 ms total)
 
 [----------] 3 tests from Concurrency
 [ RUN      ] Concurrency.HighRateReadNeverWaitsForAControlOperation
-[       OK ] Concurrency.HighRateReadNeverWaitsForAControlOperation (11 ms)
+[       OK ] Concurrency.HighRateReadNeverWaitsForAControlOperation (18 ms)
 [ RUN      ] Concurrency.EveryControlPathReportsBusyWithoutBlocking
-[       OK ] Concurrency.EveryControlPathReportsBusyWithoutBlocking (162 ms)
+[       OK ] Concurrency.EveryControlPathReportsBusyWithoutBlocking (179 ms)
 [ RUN      ] Concurrency.SchedInNeverWaitsForTheGate
-[       OK ] Concurrency.SchedInNeverWaitsForTheGate (1 ms)
-[----------] 3 tests from Concurrency (175 ms total)
+[       OK ] Concurrency.SchedInNeverWaitsForTheGate (2 ms)
+[----------] 3 tests from Concurrency (201 ms total)
 
 [----------] Global test environment tear-down
-[==========] 17 tests from 3 test suites ran. (204 ms total)
+[==========] 17 tests from 3 test suites ran. (272 ms total)
 [  PASSED  ] 17 tests.
 exit status: 0
 
@@ -59,43 +59,42 @@ $ build-components/bin/Linux/Adxl355_Application_ut_exe
 [----------] Global test environment set-up.
 [----------] 5 tests from Nominal
 [ RUN      ] Nominal.SevenSensorFrame
-[       OK ] Nominal.SevenSensorFrame (1 ms)
+[       OK ] Nominal.SevenSensorFrame (5 ms)
 [ RUN      ] Nominal.InitializeAllInternalMode
-[       OK ] Nominal.InitializeAllInternalMode (0 ms)
+[       OK ] Nominal.InitializeAllInternalMode (3 ms)
 [ RUN      ] Nominal.AcquisitionStartsDisabled
-[       OK ] Nominal.AcquisitionStartsDisabled (0 ms)
+[       OK ] Nominal.AcquisitionStartsDisabled (3 ms)
 [ RUN      ] Nominal.DisabledAcquisitionDoesNoWork
-[       OK ] Nominal.DisabledAcquisitionDoesNoWork (0 ms)
+[       OK ] Nominal.DisabledAcquisitionDoesNoWork (3 ms)
 [ RUN      ] Nominal.EnablingRestartsEdgeDetection
-[       OK ] Nominal.EnablingRestartsEdgeDetection (0 ms)
-[----------] 5 tests from Nominal (3 ms total)
+[       OK ] Nominal.EnablingRestartsEdgeDetection (4 ms)
+[----------] 5 tests from Nominal (23 ms total)
 
 [----------] 6 tests from OffNominal
 [ RUN      ] OffNominal.InitializeAllReportsPartialMask
-[       OK ] OffNominal.InitializeAllReportsPartialMask (0 ms)
+[       OK ] OffNominal.InitializeAllReportsPartialMask (2 ms)
 [ RUN      ] OffNominal.InvalidSensorCountsAreRejected
-[       OK ] OffNominal.InvalidSensorCountsAreRejected (0 ms)
+[       OK ] OffNominal.InvalidSensorCountsAreRejected (2 ms)
 [ RUN      ] OffNominal.PartialFrameIsEdgeReportedAndRecovers
-[       OK ] OffNominal.PartialFrameIsEdgeReportedAndRecovers (0 ms)
+[       OK ] OffNominal.PartialFrameIsEdgeReportedAndRecovers (1 ms)
 [ RUN      ] OffNominal.ReconfigurationIsRejectedWhileEnabled
-[       OK ] OffNominal.ReconfigurationIsRejectedWhileEnabled (0 ms)
+[       OK ] OffNominal.ReconfigurationIsRejectedWhileEnabled (1 ms)
 [ RUN      ] OffNominal.IntermittentSensorEventsAreThrottled
-[       OK ] OffNominal.IntermittentSensorEventsAreThrottled (0 ms)
+[       OK ] OffNominal.IntermittentSensorEventsAreThrottled (1 ms)
 [ RUN      ] OffNominal.FrameEdgesBeyondTheQueueAreDropped
-[       OK ] OffNominal.FrameEdgesBeyondTheQueueAreDropped (0 ms)
-[----------] 6 tests from OffNominal (3 ms total)
+[       OK ] OffNominal.FrameEdgesBeyondTheQueueAreDropped (1 ms)
+[----------] 6 tests from OffNominal (18 ms total)
 
 [----------] 3 tests from Concurrency
 [ RUN      ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap
-[       OK ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap (0 ms)
+[       OK ] Concurrency.OverlappingTriggerIsSkippedCountedAndLeavesASequenceGap (1 ms)
 [ RUN      ] Concurrency.CommandsDuringInitializationReportBusy
-[       OK ] Concurrency.CommandsDuringInitializationReportBusy (19 ms)
+[       OK ] Concurrency.CommandsDuringInitializationReportBusy (21 ms)
 [ RUN      ] Concurrency.SchedInPublishesWhileAFrameOwnsTheGate
-[       OK ] Concurrency.SchedInPublishesWhileAFrameOwnsTheGate (0 ms)
-[----------] 3 tests from Concurrency (20 ms total)
+[       OK ] Concurrency.SchedInPublishesWhileAFrameOwnsTheGate (1 ms)
+[----------] 3 tests from Concurrency (24 ms total)
 
 [----------] Global test environment tear-down
-[==========] 14 tests from 3 test suites ran. (27 ms total)
+[==========] 14 tests from 3 test suites ran. (68 ms total)
 [  PASSED  ] 14 tests.
 exit status: 0
-

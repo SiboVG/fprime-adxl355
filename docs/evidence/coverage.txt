@@ -1,5 +1,5 @@
 # Coverage
-# Recorded 2026-10-01T22:38Z on Linux x86_64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
+# Recorded 2026-10-09T23:37Z on Linux aarch64 (Ubuntu 24.04.5 LTS); gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; F Prime 35d4c0e (v4.2.0-267); fpp v3.3.0a12 and cmake version 3.26.0 from an F Prime 35d4c0e tool venv; host cmake version 3.28.3
 
 ## Portable core with GCC 13 (the CI compiler), CI gates --fail-under-line 95 --fail-under-branch 80
 100% tests passed, 0 tests failed out of 3
@@ -43,7 +43,7 @@ TOTAL                                        510     481    94%
 ------------------------------------------------------------------------------
 lines: 94.3% (481 out of 510)
 functions: 100.0% (51 out of 51)
-branches: 57.8% (519 out of 898)
+branches: 57.9% (512 out of 884)
 gate exit status: 0
 
 Branch percentages for generated-macro-heavy F Prime sources are reported in the CI artifact but not gated: GCC counts implicit branches in telemetry and event macros.

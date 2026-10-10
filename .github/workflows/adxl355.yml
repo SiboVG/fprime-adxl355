@@ -11,6 +11,8 @@ on:
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".clang-tidy"
+      - "static-analysis.toml"
+      - "scripts/**"
       - ".github/workflows/adxl355.yml"
   pull_request:
     paths:
@@ -22,6 +24,8 @@ on:
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".clang-tidy"
+      - "static-analysis.toml"
+      - "scripts/**"
       - ".github/workflows/adxl355.yml"
   workflow_dispatch:
 
@@ -98,19 +102,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Install static-analysis tooling
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy ninja-build
-      - name: Generate compilation database
-        run: >-
-          cmake -S tests -B build-adxl355-static -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      - name: Analyze hardware-independent production sources
-        run: >-
-          clang-tidy --warnings-as-errors=* -p build-adxl355-static
-          Adxl355/Device/Device.cpp
-          Adxl355/Device/AccessGate.cpp
-          Adxl355/Array/SynchronizedArray.cpp
+      - name: Install build tooling
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Cache pinned cppcheck
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/cppcheck-2.22.0
+          key: cppcheck-2.22.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Install pinned cppcheck and clang-tidy
+        run: |
+          sh scripts/install-cppcheck.sh
+          echo "CPPCHECK=$HOME/.local/cppcheck-2.22.0/bin/cppcheck" >> "$GITHUB_ENV"
+          pipx install clang-tidy==22.1.8
+      - name: Static analysis of the portable core (cppcheck + clang-tidy, zero findings)
+        run: python3 scripts/static_analysis.py --build host
 
   fprime-components:
     runs-on: ubuntu-24.04
@@ -127,10 +132,20 @@ jobs:
         with:
           python-version: "3.11"
       # fprime/requirements.txt already pins gcovr (8.2); a second pin conflicts.
-      - name: Install F Prime and analysis tooling
+      - name: Install F Prime and build tooling
         run: >-
           python -m pip install -r fprime/requirements.txt &&
-          sudo apt-get update && sudo apt-get install -y clang-tidy ninja-build
+          sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Cache pinned cppcheck
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/cppcheck-2.22.0
+          key: cppcheck-2.22.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Install pinned cppcheck and clang-tidy
+        run: |
+          sh scripts/install-cppcheck.sh
+          echo "CPPCHECK=$HOME/.local/cppcheck-2.22.0/bin/cppcheck" >> "$GITHUB_ENV"
+          pipx install clang-tidy==22.1.8
       - name: Generate the component consumer with coverage
         run: >-
           cmake -S tests/fprime-consumer -B build-components -G Ninja
@@ -152,12 +167,10 @@ jobs:
           --gcov-ignore-errors=no_working_dir_found
           --fail-under-line 85
           build-components/Adxl355
-      - name: Analyze F Prime component sources
-        run: >-
-          clang-tidy --warnings-as-errors=* -p build-components
-          Adxl355/Manager/Manager.cpp
-          Adxl355/Application/SynchronizedApplication.cpp
-          Adxl355/Platform/OsDelay.cpp
+      - name: Static analysis of every module in the F Prime build (cppcheck + clang-tidy, zero findings)
+        run: python3 scripts/static_analysis.py --build components
+        env:
+          FPRIME_FRAMEWORK_PATH: ${{ github.workspace }}/fprime
 
   documentation:
     runs-on: ubuntu-24.04
